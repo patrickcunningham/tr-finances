@@ -75,7 +75,7 @@ Interest paid by a bond the Account holds.
 _Avoid_: Interest (that is only interest on cash), bond interest
 
 **Accrued Interest**:
-Interest that had built up on a bond since its last Coupon, which the buyer pays to the seller on top of the price. It counts as negative capital income, not as part of the bond's cost.
+Interest that has built up on a bond since its last Coupon and changes hands with the bond on top of its price. It is negative capital income for the buyer and capital income for the seller, and it is neither part of the bond's cost nor part of the sale proceeds.
 _Avoid_: Stückzinsen, fees
 
 **Tax Event**:
@@ -105,7 +105,7 @@ The profit or loss made when a security is sold, measured against the cost of it
 _Avoid_: Profit, return, P&L
 
 **Market Price**:
-The latest price of a security on LS Exchange (falling back to Xetra), with the time it was fetched. A bond's Market Price is a percentage of its nominal amount, converted into EUR.
+The latest known price of one unit of a security in EUR, together with where it came from and when it was fetched. For a bond, one unit is one unit of nominal.
 _Avoid_: Current price, quote
 
 **Unrealised Gain**:

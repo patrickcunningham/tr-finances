@@ -10,7 +10,7 @@ interface Props {
 }
 
 const ROWS: { label: string; pick: (a: AccountTaxYear) => number; note?: string }[] = [
-  { label: 'Payouts (dividends and distributions)', pick: (a) => a.payouts },
+  { label: 'Payouts', pick: (a) => a.payouts },
   { label: 'Interest on cash', pick: (a) => a.interest },
   { label: 'Coupons', pick: (a) => a.coupons },
   { label: 'Share gains', pick: (a) => a.shareGains },
@@ -18,12 +18,14 @@ const ROWS: { label: string; pick: (a: AccountTaxYear) => number; note?: string 
   { label: 'Other gains', pick: (a) => a.otherGains },
   { label: 'Other losses', pick: (a) => -a.otherLosses },
   { label: 'Accrued Interest paid', pick: (a) => -a.accruedInterestPaid, note: 'negative capital income' },
+  { label: 'Accrued Interest received', pick: (a) => a.accruedInterestReceived, note: 'on bond sales' },
   { label: 'Share Loss Pot carried in', pick: (a) => a.sharePotCarriedIn },
   { label: 'General Loss Pot carried in', pick: (a) => a.generalPotCarriedIn },
   { label: 'Taxable income after Loss Pots', pick: (a) => a.taxableIncome },
   { label: 'Share Loss Pot carried out', pick: (a) => a.sharePotCarriedOut },
   { label: 'General Loss Pot carried out', pick: (a) => a.generalPotCarriedOut },
-  { label: 'Tax on Vorabpauschale', pick: (a) => a.vorabpauschaleTax },
+  { label: 'Withheld Tax on Vorabpauschale', pick: (a) => a.vorabpauschaleTax },
+  { label: 'Withheld Tax from other Tax Events', pick: (a) => a.otherTaxEventsTax, note: 'tax optimisations and corrections' },
   { label: 'Withheld Tax (Trade Republic, authoritative)', pick: (a) => a.withheldTax },
   { label: 'Estimated tax (cross-check only)', pick: (a) => -a.estimatedTax, note: 'flat 26.375 %, no church tax or Teilfreistellung' },
 ]
@@ -54,7 +56,7 @@ export function TaxTab({ dashboard, accounts, year, onYearChange, onAllowanceCha
       <div className="card">
         <h2>Freistellungsauftrag {year}</h2>
         <p className="muted">
-          Household: {money(tax.household.allowanceUsed)} used of {money(tax.household.allowance)} jointly assessed allowance.
+          Household (both Accounts): {money(tax.household.allowanceUsed)} used of {money(tax.household.allowance)} jointly assessed allowance.
         </p>
         <div style={{ height: 10, background: 'var(--border)', borderRadius: 5, overflow: 'hidden', marginBottom: 12 }}>
           <div style={{ width: `${usedShare * 100}%`, height: '100%', background: 'var(--accent)' }} />

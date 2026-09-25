@@ -35,3 +35,15 @@ describe('Transaction filters', () => {
     expect(ids(dashboardFor({ scope: 'A', transactionFilter: { search: 'tax correction' } }))).toEqual(['A-19'])
   })
 })
+
+describe('quick ranges include today and cover exactly the stated length', () => {
+  it('counts "last 33 days" as today and the 32 days before it', () => {
+    // 33 days ending 3 April 2025 start on 2 March, so the 1 March Transaction is outside.
+    expect(ids(dashboardFor({ scope: 'A', today: '2025-04-03', range: { kind: 'lastDays', days: 33 } }))).toEqual(['A-19'])
+  })
+
+  it('starts "last year" the day after the same date a year ago', () => {
+    // A-06 is dated 2 April 2024, exactly a year before; it falls outside.
+    expect(dashboardFor({ scope: 'A', today: '2025-04-02', range: { kind: 'lastYear' } }).transactions).toHaveLength(12)
+  })
+})

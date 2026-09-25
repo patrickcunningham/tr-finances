@@ -17,7 +17,7 @@ interface Props {
 
 const unitPrice = (p: PositionView, value: number) => (p.assetClass === 'BOND' ? `${(value * 100).toFixed(2)} %` : money(value))
 
-function ManualPrice({ position, onSave }: { position: PositionView; onSave: (price: number) => void }) {
+function ManualPrice({ position, onSave, onCancel }: { position: PositionView; onSave: (price: number) => void; onCancel?: () => void }) {
   const [text, setText] = useState('')
   const bond = position.assetClass === 'BOND'
   return (
@@ -39,12 +39,14 @@ function ManualPrice({ position, onSave }: { position: PositionView; onSave: (pr
       >
         Set
       </button>
+      {onCancel && <button onClick={onCancel}>Cancel</button>}
     </span>
   )
 }
 
 export function PortfolioTab({ dashboard, accounts, showAccount, onRefreshPrices, refreshing, failedIsins, onManualPrice }: Props) {
   const { positions, realisedSales } = dashboard.portfolio
+  const [editing, setEditing] = useState<string | null>(null)
   const holder = (id: string) => accounts.find((a) => a.id === id)?.holderName ?? id
   const oldestFirst = [...realisedSales].reverse()
   const runningGain = cumulative(oldestFirst.map((s) => s.realisedGain))
@@ -89,15 +91,23 @@ export function PortfolioTab({ dashboard, accounts, showAccount, onRefreshPrices
                   <td className="num">{unitPrice(p, p.averageCost)}</td>
                   <td className="num">{money(p.investedCapital)}</td>
                   <td className="num">
-                    {p.marketPrice ? (
+                    {p.marketPrice && editing !== p.isin ? (
                       <>
                         {unitPrice(p, p.marketPrice.price)}
                         <div className="muted">
-                          {p.marketPrice.source === 'manual' ? 'entered by hand' : p.marketPrice.venue ?? p.marketPrice.source} · {age(p.marketPrice.fetchedAt)}
+                          {p.marketPrice.source === 'manual' ? 'entered by hand' : p.marketPrice.venue ?? p.marketPrice.source} · {age(p.marketPrice.fetchedAt)}{' '}
+                          <button onClick={() => setEditing(p.isin)}>Change</button>
                         </div>
                       </>
                     ) : (
-                      <ManualPrice position={p} onSave={(price) => onManualPrice(p.isin, price)} />
+                      <ManualPrice
+                        position={p}
+                        onSave={(price) => {
+                          onManualPrice(p.isin, price)
+                          setEditing(null)
+                        }}
+                        onCancel={p.marketPrice ? () => setEditing(null) : undefined}
+                      />
                     )}
                   </td>
                   <td className="num">{money(p.marketValue)}</td>

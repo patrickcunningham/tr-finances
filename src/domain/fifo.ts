@@ -1,4 +1,4 @@
-import type { Entry } from './entries'
+import type { AssetClass, Transaction } from './transactions'
 import { Decimal, ZERO, sum } from './money'
 import type { AccountId } from './types'
 
@@ -7,76 +7,80 @@ interface Lot {
   cost: Decimal
 }
 
-export interface Holding {
+export interface PositionLots {
   accountId: AccountId
   isin: string
   name: string
-  assetClass: string
+  assetClass: AssetClass
   lots: Lot[]
 }
 
 export interface Sale {
-  entry: Entry
+  transaction: Transaction
   quantity: Decimal
   cost: Decimal
   proceeds: Decimal
   realisedGain: Decimal
 }
 
-export interface AccruedInterestPaid {
-  entry: Entry
+/** Positive when paid on a bond buy, negative when received on a bond sale. */
+export interface AccruedInterest {
+  transaction: Transaction
   amount: Decimal
 }
 
-const holdingKey = (e: Entry) => `${e.accountId}|${e.isin}`
+const positionKey = (e: Transaction) => `${e.accountId}|${e.isin}`
 
 /**
  * Keeps FIFO lots per Account and ISIN as Transactions are applied oldest first.
- * Costs include fees. For a bond, quantity is the nominal amount and price a fraction of it; whatever the buyer
- * paid beyond quantity × price is Accrued Interest, which is not part of the cost.
+ * Costs include fees. For a bond, quantity is the nominal amount and price a fraction of it; anything paid or
+ * received beyond quantity × price is Accrued Interest, which is neither cost nor sale proceeds.
  */
 export class FifoLedger {
-  readonly holdings = new Map<string, Holding>()
+  readonly positions = new Map<string, PositionLots>()
   readonly sales: Sale[] = []
-  readonly accruedInterest: AccruedInterestPaid[] = []
+  readonly accruedInterest: AccruedInterest[] = []
 
-  apply(e: Entry) {
+  apply(e: Transaction) {
     if (e.tradeSide === 'buy') this.buy(e)
     else if (e.tradeSide === 'sell') this.sell(e)
     else if (e.kind === 'corporateAction' && e.isin && !e.shares.isZero()) this.split(e)
   }
 
   investedCapital(): Decimal {
-    return sum([...this.holdings.values()].flatMap((h) => h.lots.map((l) => l.cost)))
+    return sum([...this.positions.values()].flatMap((h) => h.lots.map((l) => l.cost)))
   }
 
-  openHoldings(): Holding[] {
-    return [...this.holdings.values()].filter((h) => h.lots.length > 0)
+  openPositions(): PositionLots[] {
+    return [...this.positions.values()].filter((h) => h.lots.length > 0)
   }
 
-  private holding(e: Entry): Holding {
-    const key = holdingKey(e)
-    let h = this.holdings.get(key)
+  private positionFor(e: Transaction): PositionLots {
+    const key = positionKey(e)
+    let h = this.positions.get(key)
     if (!h) {
       h = { accountId: e.accountId, isin: e.isin, name: e.name, assetClass: e.assetClass, lots: [] }
-      this.holdings.set(key, h)
+      this.positions.set(key, h)
     }
     if (e.name) h.name = e.name
     return h
   }
 
-  private buy(e: Entry) {
-    let price = e.amount.abs()
-    if (e.assetClass === 'BOND') {
-      price = e.shares.times(e.price)
-      const accrued = e.amount.abs().minus(price)
-      if (accrued.greaterThan(0)) this.accruedInterest.push({ entry: e, amount: accrued })
-    }
-    this.holding(e).lots.push({ quantity: e.shares, cost: price.plus(e.fee.abs()) })
+  /** The trade's value without Accrued Interest, which is recorded on its own. */
+  private cleanValue(e: Transaction): Decimal {
+    if (e.assetClass !== 'BOND') return e.amount.abs()
+    const clean = e.shares.abs().times(e.price)
+    const accrued = e.amount.abs().minus(clean)
+    if (accrued.greaterThan(0)) this.accruedInterest.push({ transaction: e, amount: e.tradeSide === 'buy' ? accrued : accrued.negated() })
+    return clean
   }
 
-  private sell(e: Entry) {
-    const h = this.holding(e)
+  private buy(e: Transaction) {
+    this.positionFor(e).lots.push({ quantity: e.shares, cost: this.cleanValue(e).plus(e.fee.abs()) })
+  }
+
+  private sell(e: Transaction) {
+    const h = this.positionFor(e)
     let remaining = e.shares.abs()
     let cost = ZERO
     while (remaining.greaterThan(0) && h.lots.length > 0) {
@@ -93,13 +97,13 @@ export class FifoLedger {
         remaining = ZERO
       }
     }
-    const proceeds = e.amount.minus(e.fee.abs())
-    this.sales.push({ entry: e, quantity: e.shares.abs(), cost, proceeds, realisedGain: proceeds.minus(cost) })
+    const proceeds = this.cleanValue(e).minus(e.fee.abs())
+    this.sales.push({ transaction: e, quantity: e.shares.abs(), cost, proceeds, realisedGain: proceeds.minus(cost) })
   }
 
   /** A split's shares are the change in quantity, spread across the lots in proportion; total cost stays the same. */
-  private split(e: Entry) {
-    const h = this.holding(e)
+  private split(e: Transaction) {
+    const h = this.positionFor(e)
     const before = sum(h.lots.map((l) => l.quantity))
     if (before.isZero()) return
     const factor = before.plus(e.shares).dividedBy(before)

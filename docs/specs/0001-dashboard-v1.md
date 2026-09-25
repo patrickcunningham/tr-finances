@@ -52,7 +52,7 @@ It can show the Household or either Account. The only network traffic is fetchin
 15. As an Account Holder, I want to switch between the Household and each individual Account, so that I can look at my own or my partner's figures.
 16. As an Account Holder, I want Internal Transfers between our Accounts to cancel out in the Household view, so that moving money between us doesn't look like money coming in or going out.
 17. As an Account Holder, I want Internal Transfers to still show as a Deposit or Withdrawal in each Account's own view, so that each Account adds up on its own.
-18. As an Account Holder, I want quick date filters (30 days, 90 days, YTD, 1 year, All) plus a custom from/to range, so that I can focus on a period.
+18. As an Account Holder, I want quick date filters (30 days, 90 days, YTD, 1 year, All) that end today and cover exactly that length, plus a custom from/to range, so that I can focus on a period.
 19. As an Account Holder, I want the date filter to apply to every tab except Tax, so that all the figures I see cover the same period.
 20. As an Account Holder, I want all figures dated by Transaction Date, so that month and year totals match what Trade Republic reports.
 
@@ -81,7 +81,7 @@ It can show the Household or either Account. The only network traffic is fetchin
 35. As an Account Holder, I want a table of realised sales showing Transaction Date, security, quantity, FIFO cost, proceeds and Realised Gain, so that I can see the result of each sale.
 36. As an Account Holder, I want a chart of Realised Gain over time, so that I can see when I took profits or losses.
 37. As an Account Holder, I want Market Prices refreshed when I ask, showing when each price was fetched, so that I know how current the values are.
-38. As an Account Holder, I want to type in a Market Price by hand when no quote source returns one, so that every Position can be valued.
+38. As an Account Holder, I want to type in a Market Price by hand when no price source returns one, or to replace a stale one, so that every Position can be valued.
 39. As an Account Holder, I want the last fetched Market Price kept and shown, with its age, when a refresh fails, so that the dashboard stays usable offline or when a source breaks.
 40. As an Account Holder, I want Positions I hold in both Accounts shown combined in the Household view, so that I see our total exposure to each security.
 
@@ -96,7 +96,7 @@ It can show the Household or either Account. The only network traffic is fetchin
 
 ### Cashflow
 
-47. As an Account Holder, I want a Sankey diagram from sources (Deposits, Payouts, Interest, Coupons, Trade sale proceeds) to destinations (Trade purchases by asset class, Withdrawals, Withheld Tax, remaining cash), so that I can see how money moved through the Account over the chosen period.
+47. As an Account Holder, I want a Sankey diagram from sources (Deposits, Payouts, Interest, Coupons, Trade sale proceeds, tax refunds, cash already held) to destinations (Trade purchases by asset class, Withdrawals, Withheld Tax, fees, cash added), so that I can see how money moved through the Account over the chosen period.
 48. As an Account Holder, I want the Household Sankey to leave out Internal Transfers, so that the diagram shows only money actually entering and leaving the Household.
 
 ### Tax
@@ -145,19 +145,19 @@ It can show the Household or either Account. The only network traffic is fetchin
   - Lots are kept per Account per ISIN. SELL quantities are negative in the export.
   - A SPLIT's shares value is the change in quantity, not the new total. It is spread across the existing lots in proportion and leaves total cost unchanged.
   - For bonds, quantity is the nominal amount and price is a fraction of nominal.
-- **Accrued Interest:** on a bond BUY, the difference between |amount| and quantity × price. It is recorded as Accrued Interest in that Transaction Date's tax year and is not included in the lot's cost.
+- **Accrued Interest:** on a bond trade, the difference between |amount| and quantity × price. On a buy it is paid and is not included in the lot's cost. On a sell it is received and is not part of the sale proceeds. Either way it is recorded in that Transaction Date's tax year.
 - **Loss Pots:** Realised Gains on STOCK asset-class sales go in the share pot, and all other Realised Gains in the general pot. Pots are tracked per Account per tax year.
-- **Withheld Tax:** always taken from the tax column. The app's own tax calculation is only a labelled cross-check.
-- **Freistellungsauftrag:** a joint Household allowance (€2,000 from 2023, €1,602 before), with a per-Account split per year entered by the Account Holder. Usage counts capital income subject to German withholding tax: Payouts, Interest, Coupons, Vorabpauschale and Realised Gains, net of losses where the pots allow.
+- **Withheld Tax:** always taken from the tax column. The app's own tax calculation is only a labelled cross-check at the flat 26.375 % rate (Kapitalertragsteuer plus Solidaritätszuschlag, without church tax or Teilfreistellung). Tax from Tax Events other than the Vorabpauschale is shown on its own line.
+- **Freistellungsauftrag:** a joint Household allowance (€2,000 from 2023, €1,602 before), with a per-Account split per year entered by the Account Holder. Until a split is entered it is shared evenly. The Household tracker always covers both Accounts, whichever view is chosen. The Vorabpauschale's base amount is not in the Transaction Export, so it is left out of usage and the Tax tab says so. Usage counts capital income subject to German withholding tax: Payouts, Interest, Coupons, Vorabpauschale and Realised Gains, net of losses where the pots allow.
 - **Market Prices (ADR 0002):**
   - Order of sources: onvista's snapshot API first, then Tradegate for stocks and ETFs, then a price typed in by hand.
-  - The LS Exchange quote is preferred, falling back to Xetra.
+  - Venues are preferred in the order LS Exchange, Lang & Schwarz, Xetra, then the most recently updated venue. Quotes older than 7 days are ignored. Tradegate falls back to the bid/ask midpoint when it has no last price.
   - Bond quotes are a percentage of a USD nominal and are converted into EUR using onvista's EUR/USD rate.
   - Every Market Price carries its source and fetch time. The last successful price for each ISIN is kept.
 - **Price source interface:** takes a list of ISINs and returns a Market Price or a failure for each one. It is implemented by an onvista adapter, a Tradegate adapter and a chain that combines them, and it stays separate from the domain core.
 - **History store interface:** saves and loads Transaction Histories, the account register, the Freistellungsauftrag split and the last Market Prices. It is implemented on IndexedDB, and browser-storage failures are handled gracefully.
 - **Account register:** entered by the Account Holder on each device, because the Transaction Export contains no account id or own IBAN.
-- **UI:** six tabs (Overview, Transactions, Portfolio, Income, Cashflow, Tax), a switch between the Household and each Account, and a global date filter that the Tax tab ignores in favour of a tax-year picker. The UI is English, but Trade Republic's German terms (Vorabpauschale, Freistellungsauftrag) are kept as-is. All vocabulary follows CONTEXT.md.
+- **UI:** six tabs (Overview, Transactions, Portfolio, Income, Cashflow, Tax) plus an Accounts tab for registering Accounts and importing, a switch between the Household and each Account, and a global date filter that the Tax tab ignores in favour of a tax-year picker. The UI is English, but Trade Republic's German terms (Vorabpauschale, Freistellungsauftrag) are kept as-is. All vocabulary follows CONTEXT.md.
 
 ## Testing Decisions
 

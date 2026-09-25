@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { MarketPrice } from '../domain'
-import { refreshMarketPrices, type Instrument, type PriceSource } from './priceChain'
+import { refreshMarketPrices, type Instrument, type PriceAdapter } from './priceChain'
 
 const NOW = '2025-06-01T10:00:00.000Z'
 const world: Instrument = { isin: 'IE0000000001', assetClass: 'FUND' }
 const bond: Instrument = { isin: 'XS0000000001', assetClass: 'BOND' }
 
-const source = (name: 'onvista' | 'tradegate', prices: Record<string, number | 'throws'>): PriceSource => ({
+const fakeAdapter = (name: 'onvista' | 'tradegate', prices: Record<string, number | 'throws'>): PriceAdapter => ({
   name,
-  async quote(instrument) {
+  async fetchPrice(instrument) {
     const result = prices[instrument.isin]
     if (result === 'throws') throw new Error('network down')
     return result === undefined ? null : { price: result, venue: `${name} venue` }
@@ -19,7 +19,7 @@ const earlier: MarketPrice = { isin: 'XS0000000001', price: 0.8, source: 'onvist
 
 describe('refreshing Market Prices', () => {
   it('takes the price from the first source that has one', async () => {
-    const result = await refreshMarketPrices([world], [source('onvista', { IE0000000001: 130 }), source('tradegate', { IE0000000001: 131 })], {}, NOW)
+    const result = await refreshMarketPrices([world], [fakeAdapter('onvista', { IE0000000001: 130 }), fakeAdapter('tradegate', { IE0000000001: 131 })], {}, NOW)
     expect(result.prices.IE0000000001).toEqual({ isin: 'IE0000000001', price: 130, source: 'onvista', venue: 'onvista venue', fetchedAt: NOW })
     expect(result.failedIsins).toEqual([])
   })
@@ -27,7 +27,7 @@ describe('refreshing Market Prices', () => {
   it('falls back to the next source when one has no price or fails', async () => {
     const result = await refreshMarketPrices(
       [world, bond],
-      [source('onvista', { IE0000000001: 'throws' }), source('tradegate', { IE0000000001: 131, XS0000000001: 0.79 })],
+      [fakeAdapter('onvista', { IE0000000001: 'throws' }), fakeAdapter('tradegate', { IE0000000001: 131, XS0000000001: 0.79 })],
       {},
       NOW,
     )
@@ -36,19 +36,19 @@ describe('refreshing Market Prices', () => {
   })
 
   it('keeps the last known price, with its original time, when every source fails', async () => {
-    const result = await refreshMarketPrices([bond], [source('onvista', { XS0000000001: 'throws' }), source('tradegate', {})], { XS0000000001: earlier }, NOW)
+    const result = await refreshMarketPrices([bond], [fakeAdapter('onvista', { XS0000000001: 'throws' }), fakeAdapter('tradegate', {})], { XS0000000001: earlier }, NOW)
     expect(result.prices.XS0000000001).toEqual(earlier)
     expect(result.failedIsins).toEqual(['XS0000000001'])
   })
 
   it('reports an instrument no source could price and that has no earlier price', async () => {
-    const result = await refreshMarketPrices([bond], [source('onvista', {})], {}, NOW)
+    const result = await refreshMarketPrices([bond], [fakeAdapter('onvista', {})], {}, NOW)
     expect(result.prices).toEqual({})
     expect(result.failedIsins).toEqual(['XS0000000001'])
   })
 
   it('keeps prices for instruments it was not asked about', async () => {
-    const result = await refreshMarketPrices([world], [source('onvista', { IE0000000001: 130 })], { XS0000000001: earlier }, NOW)
+    const result = await refreshMarketPrices([world], [fakeAdapter('onvista', { IE0000000001: 130 })], { XS0000000001: earlier }, NOW)
     expect(result.prices.XS0000000001).toEqual(earlier)
   })
 })

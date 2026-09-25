@@ -1,6 +1,7 @@
-import type { Entry } from './entries'
+import { taxYearOf } from './dates'
+import type { Transaction } from './transactions'
 import { FifoLedger } from './fifo'
-import { Decimal, ZERO, euros, sum } from './money'
+import { Decimal, ZERO, euros, roundCents, sum } from './money'
 import type { AccountId, AllowanceSplits } from './types'
 
 /** Kapitalertragsteuer 25 % plus 5.5 % Solidaritätszuschlag on it. Church tax is ignored. */
@@ -21,7 +22,11 @@ export interface AccountTaxYear {
   otherLosses: number
   /** Paid on bond purchases; negative capital income in the year it was paid. */
   accruedInterestPaid: number
+  /** Received on bond sales; capital income in the year it was received. */
+  accruedInterestReceived: number
   vorabpauschaleTax: number
+  /** Withheld or refunded by Tax Events other than the Vorabpauschale, such as tax optimisations and corrections. */
+  otherTaxEventsTax: number
   /** Everything Trade Republic withheld (negative) or refunded (positive) in the year. Authoritative. */
   withheldTax: number
   sharePotCarriedIn: number
@@ -40,8 +45,19 @@ export interface AccountTaxYear {
 
 export interface TaxView {
   years: string[]
+  /** The Accounts in the chosen scope. */
   accounts: AccountTaxYear[]
+  /** Always both Accounts: the Freistellungsauftrag is shared by the Household whatever the scope. */
   household: { allowance: number; allowanceUsed: number; withheldTax: number; estimatedTax: number }
+}
+
+export interface TaxInput {
+  /** Every Account's Transactions, oldest first. */
+  transactions: Transaction[]
+  shownAccountIds: AccountId[]
+  householdAccountIds: AccountId[]
+  year: string
+  splits: AllowanceSplits
 }
 
 interface YearFigures {
@@ -52,17 +68,20 @@ interface YearFigures {
   shareLosses: Decimal
   otherGains: Decimal
   otherLosses: Decimal
-  accrued: Decimal
+  accruedPaid: Decimal
+  accruedReceived: Decimal
   vorabpauschaleTax: Decimal
+  otherTaxEventsTax: Decimal
   withheldTax: Decimal
 }
 
-function figuresFor(own: Entry[], ledger: FifoLedger, accountId: AccountId, year: string): YearFigures {
-  const inYear = own.filter((e) => e.date.startsWith(year))
-  const amountOf = (kind: Entry['kind']) => sum(inYear.filter((e) => e.kind === kind).map((e) => e.amount))
-  const sales = ledger.sales.filter((s) => s.entry.accountId === accountId && s.entry.date.startsWith(year))
+function figuresFor(own: Transaction[], ledger: FifoLedger, accountId: AccountId, year: string): YearFigures {
+  const inYear = own.filter((e) => taxYearOf(e.date) === year)
+  const amountOf = (kind: Transaction['kind']) => sum(inYear.filter((e) => e.kind === kind).map((e) => e.amount))
+  const sales = ledger.sales.filter((s) => s.transaction.accountId === accountId && taxYearOf(s.transaction.date) === year)
+  const accrued = ledger.accruedInterest.filter((a) => a.transaction.accountId === accountId && taxYearOf(a.transaction.date) === year)
   const gains = (share: boolean, sign: 1 | -1) =>
-    sum(sales.filter((s) => (s.entry.assetClass === 'STOCK') === share && s.realisedGain.times(sign).greaterThan(0)).map((s) => s.realisedGain.abs()))
+    sum(sales.filter((s) => (s.transaction.assetClass === 'STOCK') === share && s.realisedGain.times(sign).greaterThan(0)).map((s) => s.realisedGain.abs()))
   return {
     payouts: amountOf('payout'),
     interest: amountOf('interest'),
@@ -71,9 +90,11 @@ function figuresFor(own: Entry[], ledger: FifoLedger, accountId: AccountId, year
     shareLosses: gains(true, -1),
     otherGains: gains(false, 1),
     otherLosses: gains(false, -1),
-    accrued: sum(ledger.accruedInterest.filter((a) => a.entry.accountId === accountId && a.entry.date.startsWith(year)).map((a) => a.amount)),
-    vorabpauschaleTax: sum(inYear.filter((e) => VORABPAUSCHALE_TYPES.has(e.type)).map((e) => e.tax)),
-    withheldTax: sum(inYear.map((e) => e.tax)),
+    accruedPaid: sum(accrued.filter((a) => a.amount.greaterThan(0)).map((a) => a.amount)),
+    accruedReceived: sum(accrued.filter((a) => a.amount.lessThan(0)).map((a) => a.amount.negated())),
+    vorabpauschaleTax: sum(inYear.filter((e) => VORABPAUSCHALE_TYPES.has(e.type)).map((e) => e.withheldTax)),
+    otherTaxEventsTax: sum(inYear.filter((e) => e.kind === 'taxEvent' && !VORABPAUSCHALE_TYPES.has(e.type)).map((e) => e.withheldTax)),
+    withheldTax: sum(inYear.map((e) => e.withheldTax)),
   }
 }
 
@@ -86,7 +107,14 @@ function applyLossPots(f: YearFigures, sharePotIn: Decimal, generalPotIn: Decima
   const sharePotOut = shareResult.lessThan(0) ? shareResult.negated() : ZERO
   shareResult = Decimal.max(shareResult, ZERO)
 
-  const generalResult = f.payouts.plus(f.interest).plus(f.coupons).plus(f.otherGains).minus(f.otherLosses).minus(f.accrued).minus(generalPotIn)
+  const generalResult = f.payouts
+    .plus(f.interest)
+    .plus(f.coupons)
+    .plus(f.accruedReceived)
+    .plus(f.otherGains)
+    .minus(f.otherLosses)
+    .minus(f.accruedPaid)
+    .minus(generalPotIn)
   let generalPotOut = ZERO
   if (generalResult.lessThan(0)) {
     const offset = Decimal.min(generalResult.negated(), shareResult)
@@ -96,19 +124,19 @@ function applyLossPots(f: YearFigures, sharePotIn: Decimal, generalPotIn: Decima
   return { sharePotOut, generalPotOut, taxable: shareResult.plus(Decimal.max(generalResult, ZERO)) }
 }
 
-export function taxOf(scoped: Entry[], accountIds: AccountId[], allAccountIds: AccountId[], year: string, splits: AllowanceSplits): TaxView {
+export function taxOf({ transactions, shownAccountIds, householdAccountIds, year, splits }: TaxInput): TaxView {
+  // Unlike the dashboard's ledger, which stops at the end of the date range, tax needs every sale ever made.
   const ledger = new FifoLedger()
-  scoped.forEach((e) => ledger.apply(e))
-  const years = [...new Set(scoped.map((e) => e.date.slice(0, 4)))].sort().reverse()
+  transactions.forEach((t) => ledger.apply(t))
   const joint = jointAllowance(year)
   const split = splits[year]
 
-  const accounts = accountIds.map((accountId): AccountTaxYear => {
-    const own = scoped.filter((e) => e.accountId === accountId)
+  const accountYear = (accountId: AccountId): AccountTaxYear => {
+    const own = transactions.filter((t) => t.accountId === accountId)
     let sharePot = ZERO
     let generalPot = ZERO
     // Run the pots forward through every earlier year so this year starts with what was carried in.
-    const earlier = [...new Set(own.map((e) => e.date.slice(0, 4)))].filter((y) => y < year).sort()
+    const earlier = [...new Set(own.map((t) => taxYearOf(t.date)))].filter((y) => y < year).sort()
     for (const y of earlier) {
       const pots = applyLossPots(figuresFor(own, ledger, accountId, y), sharePot, generalPot)
       sharePot = pots.sharePotOut
@@ -116,7 +144,7 @@ export function taxOf(scoped: Entry[], accountIds: AccountId[], allAccountIds: A
     }
     const f = figuresFor(own, ledger, accountId, year)
     const pots = applyLossPots(f, sharePot, generalPot)
-    const allowance = split?.[accountId] ?? joint / Math.max(allAccountIds.length, 1)
+    const allowance = split?.[accountId] ?? joint / Math.max(householdAccountIds.length, 1)
     const allowanceUsed = Decimal.min(pots.taxable, allowance)
     return {
       accountId,
@@ -127,8 +155,10 @@ export function taxOf(scoped: Entry[], accountIds: AccountId[], allAccountIds: A
       shareLosses: euros(f.shareLosses),
       otherGains: euros(f.otherGains),
       otherLosses: euros(f.otherLosses),
-      accruedInterestPaid: euros(f.accrued),
+      accruedInterestPaid: euros(f.accruedPaid),
+      accruedInterestReceived: euros(f.accruedReceived),
       vorabpauschaleTax: euros(f.vorabpauschaleTax),
+      otherTaxEventsTax: euros(f.otherTaxEventsTax),
       withheldTax: euros(f.withheldTax),
       sharePotCarriedIn: euros(sharePot),
       generalPotCarriedIn: euros(generalPot),
@@ -140,12 +170,14 @@ export function taxOf(scoped: Entry[], accountIds: AccountId[], allAccountIds: A
       allowanceUsed: euros(allowanceUsed),
       estimatedTax: euros(pots.taxable.minus(allowanceUsed).times(FLAT_TAX_RATE)),
     }
-  })
+  }
 
-  const total = (pick: (a: AccountTaxYear) => number) => Math.round(accounts.reduce((t, a) => t + pick(a), 0) * 100) / 100
+  const withTransactions = new Set(transactions.map((t) => t.accountId))
+  const household = householdAccountIds.filter((id) => withTransactions.has(id)).map(accountYear)
+  const total = (pick: (a: AccountTaxYear) => number) => roundCents(household.reduce((t, a) => t + pick(a), 0))
   return {
-    years,
-    accounts,
+    years: [...new Set(transactions.filter((t) => shownAccountIds.includes(t.accountId)).map((t) => taxYearOf(t.date)))].sort().reverse(),
+    accounts: shownAccountIds.map(accountYear),
     household: { allowance: joint, allowanceUsed: total((a) => a.allowanceUsed), withheldTax: total((a) => a.withheldTax), estimatedTax: total((a) => a.estimatedTax) },
   }
 }

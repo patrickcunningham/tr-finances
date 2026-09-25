@@ -1,4 +1,4 @@
-import type { Instrument, PriceSource } from './priceChain'
+import type { Instrument, PriceAdapter } from './priceChain'
 
 // Undocumented public API (see ADR 0002). Keyless and CORS-enabled; may change without notice.
 const BASE = 'https://api.onvista.de/api/v1'
@@ -7,6 +7,7 @@ const BASE = 'https://api.onvista.de/api/v1'
 const PREFERRED_MARKETS = ['_LSX', '_LUSG', '_GER']
 const MAX_QUOTE_AGE_DAYS = 7
 
+/** One venue's entry in onvista's quoteList (their term), from which a Market Price is taken. */
 interface OnvistaQuote {
   market?: { name?: string; codeMarket?: string }
   isoCurrency?: string
@@ -24,7 +25,7 @@ const PATHS: Record<string, string> = { FUND: 'funds', STOCK: 'stocks', BOND: 'b
 
 type Fetch = (url: string) => Promise<{ ok: boolean; json(): Promise<unknown> }>
 
-export function onvistaSource(fetchJson: Fetch = (url) => fetch(url)): PriceSource {
+export function onvistaSource(fetchJson: Fetch = (url) => fetch(url)): PriceAdapter {
   const get = async <T>(path: string): Promise<T | null> => {
     const response = await fetchJson(`${BASE}/${path}`)
     return response.ok ? ((await response.json()) as T) : null
@@ -38,7 +39,7 @@ export function onvistaSource(fetchJson: Fetch = (url) => fetch(url)): PriceSour
 
   return {
     name: 'onvista',
-    async quote({ isin, assetClass }: Instrument) {
+    async fetchPrice({ isin, assetClass }: Instrument) {
       const path = PATHS[assetClass]
       if (!path) return null
       const snapshot = await get<OnvistaSnapshot>(`${path}/ISIN:${isin}/snapshot`)

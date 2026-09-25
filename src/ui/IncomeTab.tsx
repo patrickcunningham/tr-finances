@@ -21,13 +21,13 @@ export function IncomeTab({ dashboard }: { dashboard: Dashboard }) {
   return (
     <>
       <div className="tiles">
-        <AmountsTile label="Payouts (after tax)" amounts={totals.payouts} />
-        <AmountsTile label="Interest (after tax)" amounts={totals.interest} />
-        <AmountsTile label="Coupons (after tax)" amounts={totals.coupons} />
+        <AmountsTile label="Payouts after Withheld Tax" amounts={totals.payouts} />
+        <AmountsTile label="Interest after Withheld Tax" amounts={totals.interest} />
+        <AmountsTile label="Coupons after Withheld Tax" amounts={totals.coupons} />
       </div>
       <div className="grid">
         <div className="card">
-          <h2>Income per month (before tax)</h2>
+          <h2>Income per month, before Withheld Tax</h2>
           <Chart
             option={{
               grid: { left: 70, right: 16, top: 40, bottom: 30 },
@@ -49,8 +49,8 @@ export function IncomeTab({ dashboard }: { dashboard: Dashboard }) {
               xAxis: { type: 'category', data: labels },
               yAxis: [euroAxis, { ...euroAxis, splitLine: { show: false } }],
               series: [
-                { name: 'Monthly (after tax)', type: 'bar', data: months.map((m) => m.interest.net) },
-                { name: 'Cumulative (after tax)', type: 'line', yAxisIndex: 1, showSymbol: false, data: cumulativeInterest },
+                { name: 'Monthly, after Withheld Tax', type: 'bar', data: months.map((m) => m.interest.net) },
+                { name: 'Cumulative, after Withheld Tax', type: 'line', yAxisIndex: 1, showSymbol: false, data: cumulativeInterest },
               ],
             }}
           />
@@ -65,8 +65,8 @@ export function IncomeTab({ dashboard }: { dashboard: Dashboard }) {
                 <th>Name</th>
                 <th>ISIN</th>
                 <th className="num">Payouts</th>
-                <th className="num">Before tax</th>
-                <th className="num">After tax</th>
+                <th className="num">Before Withheld Tax</th>
+                <th className="num">After Withheld Tax</th>
               </tr>
             </thead>
             <tbody>

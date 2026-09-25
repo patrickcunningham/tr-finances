@@ -1,4 +1,4 @@
-import type { Entry } from './entries'
+import { isIncome, type IncomeKind, type Transaction } from './transactions'
 import { Decimal, ZERO, euros } from './money'
 
 export interface Flow {
@@ -13,13 +13,13 @@ export interface CashflowView {
   destinations: Flow[]
 }
 
-const INCOME_SOURCES: Partial<Record<Entry['kind'], string>> = { payout: 'Payouts', interest: 'Interest', coupon: 'Coupons' }
+const INCOME_SOURCES: Record<IncomeKind, string> = { payout: 'Payouts', interest: 'Interest', coupon: 'Coupons' }
 
 /**
  * Splits each Transaction's Cash Effect into its parts: the amount, the fee and the Withheld Tax. What's left over
  * is the change in cash over the period, shown as "Added to cash" or "From cash".
  */
-export function cashflowOf(inRange: Entry[], leaveOut: (e: Entry) => boolean): CashflowView {
+export function cashflowOf(inRange: Transaction[], leaveOut: (e: Transaction) => boolean): CashflowView {
   const sources = new Map<string, Decimal>()
   const destinations = new Map<string, Decimal>()
   const add = (to: Map<string, Decimal>, name: string, value: Decimal) => {
@@ -33,13 +33,13 @@ export function cashflowOf(inRange: Entry[], leaveOut: (e: Entry) => boolean): C
       if (e.tradeSide === 'sell') add(sources, 'Sale proceeds', e.amount)
       else if (e.kind === 'deposit') add(sources, 'Deposits', e.amount)
       else if (e.kind === 'withdrawal') add(destinations, 'Withdrawals', e.amount.negated())
-      else if (INCOME_SOURCES[e.kind]) add(sources, INCOME_SOURCES[e.kind]!, e.amount)
+      else if (isIncome(e)) add(sources, INCOME_SOURCES[e.kind], e.amount)
       else if (e.amount.greaterThan(0)) add(sources, 'Other', e.amount)
       else add(destinations, 'Other', e.amount.negated())
       add(destinations, 'Fees', e.fee.negated())
     }
-    if (e.tax.lessThan(0)) add(destinations, 'Withheld Tax', e.tax.negated())
-    else add(sources, 'Tax refunds', e.tax)
+    if (e.withheldTax.lessThan(0)) add(destinations, 'Withheld Tax', e.withheldTax.negated())
+    else add(sources, 'Tax refunds', e.withheldTax)
   }
 
   const total = (m: Map<string, Decimal>) => [...m.values()].reduce((a, b) => a.plus(b), ZERO)

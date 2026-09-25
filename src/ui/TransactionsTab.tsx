@@ -75,7 +75,7 @@ export function TransactionsTab({ transactions, accounts, showAccount, filter, o
                 <td>{t.isin}</td>
                 <td className="num">{money(t.amount)}</td>
                 <td className="num">{t.fee ? money(t.fee) : ''}</td>
-                <td className="num">{t.tax ? money(t.tax) : ''}</td>
+                <td className="num">{t.withheldTax ? money(t.withheldTax) : ''}</td>
                 <td className={`num ${signClass(t.cashEffect)}`}>{money(t.cashEffect)}</td>
                 <td className="muted">
                   {t.description}

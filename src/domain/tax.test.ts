@@ -29,7 +29,9 @@ describe('yearly tax summary', () => {
         otherGains: 218,
         otherLosses: 0,
         accruedInterestPaid: 10,
+        accruedInterestReceived: 0,
         vorabpauschaleTax: 0,
+        otherTaxEventsTax: 0,
         withheldTax: -66.21,
         sharePotCarriedIn: 0,
         generalPotCarriedIn: 0,
@@ -88,5 +90,43 @@ describe('Loss Pots', () => {
     }).tax
     // Loss 2001 - 1799 = 202 offsets Interest of 10; 192 carries forward in the general pot.
     expect(tax.accounts[0]).toMatchObject({ otherLosses: 202, taxableIncome: 0, generalPotCarriedOut: 192, sharePotCarriedOut: 0 })
+  })
+})
+
+describe('review fixes', () => {
+  it('always tracks the whole Household’s Freistellungsauftrag, even in one Account’s view', () => {
+    expect(taxFor('A', '2024').household).toEqual({ allowance: 2000, allowanceUsed: 251, withheldTax: -68.85, estimatedTax: 0 })
+  })
+
+  it('shows tax from Tax Events other than the Vorabpauschale on its own', () => {
+    // Tax optimisation refund of 20.00 and an interest tax correction of -2.00.
+    expect(taxFor('A', '2025').accounts[0]).toMatchObject({ otherTaxEventsTax: 18 })
+  })
+
+  it('treats Accrued Interest received on a bond sale as income, not as sale proceeds', () => {
+    const histories = bothHistories()
+    histories.A.transactions.push({
+      ...histories.A.transactions[13],
+      datetime: '2025-05-02T10:00:00.000Z',
+      date: '2025-05-02',
+      type: 'SELL',
+      shares: '-500.0000000000',
+      price: '0.9500000000',
+      amount: '480.00',
+      fee: '-1.00',
+      description: 'Sell trade XS0000000001 EXAMPLE BANK, quantity: 500',
+      transaction_id: 'a0000000-0000-4000-8000-000000000098',
+    })
+    const d = buildDashboard({
+      accounts: [accountA, accountB],
+      histories,
+      marketPrices: {},
+      allowanceSplits: {},
+      options: { scope: 'A', range: { kind: 'all' }, today: '2025-06-01', taxYear: '2025' },
+    })
+    // Proceeds 500 x 0.95 - 1 fee = 474 against half the lot's cost of 901.
+    expect(d.portfolio.realisedSales[0]).toMatchObject({ cost: 450.5, proceeds: 474, realisedGain: 23.5 })
+    expect(d.portfolio.accruedInterest.at(-1)).toMatchObject({ date: '2025-05-02', amount: -5 })
+    expect(d.tax.accounts[0]).toMatchObject({ accruedInterestReceived: 5, otherGains: 23.5, taxableIncome: 68.5 })
   })
 })

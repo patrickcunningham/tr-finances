@@ -1,4 +1,4 @@
-import type { Instrument, PriceSource } from './priceChain'
+import type { Instrument, PriceAdapter } from './priceChain'
 
 // Undocumented public endpoint (see ADR 0002). Stocks and ETFs only, prices in EUR.
 // Use the tradegatebsx.com host: tradegate.de redirects without CORS headers.
@@ -13,10 +13,10 @@ const number = (value: unknown): number | null => {
   return null
 }
 
-export function tradegateSource(fetchJson: Fetch = (url) => fetch(url)): PriceSource {
+export function tradegateSource(fetchJson: Fetch = (url) => fetch(url)): PriceAdapter {
   return {
     name: 'tradegate',
-    async quote({ isin, assetClass }: Instrument) {
+    async fetchPrice({ isin, assetClass }: Instrument) {
       if (assetClass !== 'FUND' && assetClass !== 'STOCK') return null
       const response = await fetchJson(URL + encodeURIComponent(isin))
       if (!response.ok) return null

@@ -1,4 +1,5 @@
-import type { Entry } from './entries'
+import { monthOf } from './dates'
+import { isIncome, type Transaction } from './transactions'
 import { euros, sum, type Decimal } from './money'
 
 export interface IncomeAmounts {
@@ -16,27 +17,27 @@ export interface IncomeView {
   foreignCurrency: { date: string; kind: 'payout' | 'coupon'; name: string; gross: number; originalAmount: number; originalCurrency: string; fxRate: number }[]
 }
 
-const amounts = (entries: Entry[]): IncomeAmounts => {
-  const gross: Decimal = sum(entries.map((e) => e.amount))
-  const tax: Decimal = sum(entries.map((e) => e.tax))
+const amounts = (transactions: Transaction[]): IncomeAmounts => {
+  const gross: Decimal = sum(transactions.map((e) => e.amount))
+  const tax: Decimal = sum(transactions.map((e) => e.withheldTax))
   return { gross: euros(gross), withheldTax: euros(tax), net: euros(gross.plus(tax)) }
 }
 
-const split = (entries: Entry[]) => ({
-  payouts: amounts(entries.filter((e) => e.kind === 'payout')),
-  interest: amounts(entries.filter((e) => e.kind === 'interest')),
-  coupons: amounts(entries.filter((e) => e.kind === 'coupon')),
+const split = (transactions: Transaction[]) => ({
+  payouts: amounts(transactions.filter((e) => e.kind === 'payout')),
+  interest: amounts(transactions.filter((e) => e.kind === 'interest')),
+  coupons: amounts(transactions.filter((e) => e.kind === 'coupon')),
 })
 
 /** `inRange` is oldest first. Tax-only corrections are Tax Events, so they never appear here. */
-export function incomeOf(inRange: Entry[], months: string[]): IncomeView {
+export function incomeOf(inRange: Transaction[], months: string[]): IncomeView {
   const payouts = inRange.filter((e) => e.kind === 'payout')
-  const bySecurity = new Map<string, Entry[]>()
+  const bySecurity = new Map<string, Transaction[]>()
   for (const p of payouts) bySecurity.set(p.isin, [...(bySecurity.get(p.isin) ?? []), p])
 
   return {
     totals: split(inRange),
-    months: months.map((month) => ({ month, ...split(inRange.filter((e) => e.date.startsWith(month))) })),
+    months: months.map((month) => ({ month, ...split(inRange.filter((e) => monthOf(e.date) === month)) })),
     payoutsBySecurity: [...bySecurity.values()]
       .map((list) => {
         const { gross, net } = amounts(list)
@@ -44,7 +45,7 @@ export function incomeOf(inRange: Entry[], months: string[]): IncomeView {
       })
       .sort((a, b) => b.gross - a.gross),
     foreignCurrency: inRange
-      .filter((e): e is Entry & { kind: 'payout' | 'coupon' } => (e.kind === 'payout' || e.kind === 'coupon') && e.originalCurrency !== '' && e.originalCurrency !== 'EUR')
+      .filter((e): e is Transaction & { kind: 'payout' | 'coupon' } => isIncome(e) && e.kind !== 'interest' && e.originalCurrency !== '' && e.originalCurrency !== 'EUR')
       .reverse()
       .map((e) => ({
         date: e.date,

@@ -13,10 +13,11 @@ export type TransactionKind =
   | 'corporateAction'
   | 'unclassified'
 
-export type AssetClass = 'FUND' | 'STOCK' | 'BOND' | string
+/** Trade Republic's asset class; other values may appear in future exports. */
+export type AssetClass = 'FUND' | 'STOCK' | 'BOND' | (string & {})
 
 /** A Transaction with its kind worked out and its numbers parsed. */
-export interface Entry {
+export interface Transaction {
   id: string
   accountId: AccountId
   date: string
@@ -32,7 +33,7 @@ export interface Entry {
   price: Decimal
   amount: Decimal
   fee: Decimal
-  tax: Decimal
+  withheldTax: Decimal
   cashEffect: Decimal
   originalAmount: string
   originalCurrency: string
@@ -73,7 +74,7 @@ export function classify(raw: RawTransaction): { kind: TransactionKind; tradeSid
   }
 }
 
-export function toEntry(raw: RawTransaction, accountId: AccountId): Entry {
+export function toTransaction(raw: RawTransaction, accountId: AccountId): Transaction {
   const amount = dec(raw.amount)
   const fee = dec(raw.fee)
   const tax = dec(raw.tax)
@@ -91,7 +92,7 @@ export function toEntry(raw: RawTransaction, accountId: AccountId): Entry {
     price: dec(raw.price),
     amount,
     fee,
-    tax,
+    withheldTax: tax,
     cashEffect: amount.plus(fee).plus(tax),
     originalAmount: raw.original_amount,
     originalCurrency: raw.original_currency,
@@ -103,16 +104,20 @@ export function toEntry(raw: RawTransaction, accountId: AccountId): Entry {
   }
 }
 
+export type IncomeKind = 'payout' | 'interest' | 'coupon'
+export const INCOME_KINDS: readonly IncomeKind[] = ['payout', 'interest', 'coupon']
+export const isIncome = (t: Transaction): t is Transaction & { kind: IncomeKind } => (INCOME_KINDS as readonly string[]).includes(t.kind)
+
 /** Oldest first: by Transaction Date, then by booking time within a day. */
-export const chronological = (a: Entry, b: Entry) =>
+export const chronological = (a: Transaction, b: Transaction) =>
   a.date === b.date ? a.datetime.localeCompare(b.datetime) : a.date.localeCompare(b.date)
 
-export function entriesOf(histories: Histories, accounts: AccountRegistration[]): Entry[] {
-  const entries = Object.values(histories)
-    .flatMap((h) => h.transactions.map((t) => toEntry(t, h.accountId)))
+export function transactionsOf(histories: Histories, accounts: AccountRegistration[]): Transaction[] {
+  const transactions = Object.values(histories)
+    .flatMap((h) => h.transactions.map((t) => toTransaction(t, h.accountId)))
     .sort(chronological)
-  markInternalTransfers(entries, accounts)
-  return entries
+  markInternalTransfers(transactions, accounts)
+  return transactions
 }
 
 const PAIRING_WINDOW_DAYS = 3
@@ -123,16 +128,16 @@ const daysBetween = (a: string, b: string) => Math.abs(Date.parse(a) - Date.pars
  * or when a Withdrawal is matched by a Deposit of the same amount into the other Account within a few days.
  * Trade Republic leaves the IBAN off outgoing transfers, so the pairing catches that side.
  */
-function markInternalTransfers(entries: Entry[], accounts: AccountRegistration[]) {
+function markInternalTransfers(transactions: Transaction[], accounts: AccountRegistration[]) {
   const otherIbans = (accountId: AccountId) =>
     new Set(accounts.filter((a) => a.id !== accountId && a.iban).map((a) => a.iban.replace(/\s+/g, '').toUpperCase()))
-  const transfers = entries.filter((e) => e.kind === 'deposit' || e.kind === 'withdrawal')
+  const transfers = transactions.filter((e) => e.kind === 'deposit' || e.kind === 'withdrawal')
 
   for (const e of transfers) {
     if (e.counterpartyIban && otherIbans(e.accountId).has(e.counterpartyIban.toUpperCase())) e.internalTransfer = true
   }
 
-  const paired = new Set<Entry>()
+  const paired = new Set<Transaction>()
   for (const out of transfers.filter((e) => e.kind === 'withdrawal')) {
     const match = transfers.find(
       (d) =>
@@ -141,8 +146,9 @@ function markInternalTransfers(entries: Entry[], accounts: AccountRegistration[]
         d.accountId !== out.accountId &&
         d.amount.equals(out.amount.negated()) &&
         daysBetween(d.date, out.date) <= PAIRING_WINDOW_DAYS &&
-        // A Deposit that names an IBAN must name the sending Account's.
-        (!d.counterpartyIban || otherIbans(d.accountId).has(d.counterpartyIban.toUpperCase())),
+        // Where either side names an IBAN, it must be the other Account's.
+        (!d.counterpartyIban || otherIbans(d.accountId).has(d.counterpartyIban.toUpperCase())) &&
+        (!out.counterpartyIban || otherIbans(out.accountId).has(out.counterpartyIban.toUpperCase())),
     )
     if (match) {
       paired.add(match)

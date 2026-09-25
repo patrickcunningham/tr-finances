@@ -26,16 +26,17 @@ export interface TransactionHistory {
 
 export type Histories = Record<AccountId, TransactionHistory>
 
-export type PriceSource = 'onvista' | 'tradegate' | 'manual'
+/** Where a Market Price came from. */
+export type PriceOrigin = 'onvista' | 'tradegate' | 'manual'
 
 /**
  * The latest known price of one unit of a Position, in EUR. For a bond one unit is one unit of nominal,
- * so a quote of 93.6 % becomes 0.936 (after converting into EUR).
+ * so a price of 93.6 % of nominal becomes 0.936 (after converting into EUR).
  */
 export interface MarketPrice {
   isin: string
   price: number
-  source: PriceSource
+  source: PriceOrigin
   fetchedAt: string
   venue?: string
 }
