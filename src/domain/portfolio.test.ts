@@ -3,7 +3,7 @@ import { dashboardFor } from './testSupport'
 
 describe('Positions at FIFO cost', () => {
   it('lists Positions by Invested Capital, keeping what is left after a partial sell from the earliest lots first, and bonds by nominal amount', () => {
-    expect(dashboardFor({ scope: 'A' }).portfolio.positions).toEqual([
+    expect(dashboardFor({ scope: 'A' }).portfolio.positions).toMatchObject([
       { isin: 'IE0000000002', name: 'Income ETF (Dist)', assetClass: 'FUND', quantity: 20, averageCost: 50.05, investedCapital: 1001 },
       { isin: 'XS0000000001', name: 'Feb. 2034', assetClass: 'BOND', quantity: 1000, averageCost: 0.901, investedCapital: 901 },
       { isin: 'IE0000000001', name: 'World ETF (Acc)', assetClass: 'FUND', quantity: 3, averageCost: 110, investedCapital: 330 },
@@ -13,7 +13,7 @@ describe('Positions at FIFO cost', () => {
 
   it('combines the same security across both Accounts in the Household view', () => {
     const world = dashboardFor({ scope: 'household' }).portfolio.positions.find((p) => p.isin === 'IE0000000001')
-    expect(world).toEqual({ isin: 'IE0000000001', name: 'World ETF (Acc)', assetClass: 'FUND', quantity: 23, averageCost: 101.3478, investedCapital: 2331 })
+    expect(world).toMatchObject({ isin: 'IE0000000001', name: 'World ETF (Acc)', assetClass: 'FUND', quantity: 23, averageCost: 101.3478, investedCapital: 2331 })
     expect(dashboardFor({ scope: 'household' }).headline.investedCapital).toBe(4233)
   })
 

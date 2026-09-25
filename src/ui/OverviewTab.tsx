@@ -18,6 +18,8 @@ export function OverviewTab({ dashboard }: { dashboard: Dashboard }) {
     <>
       <div className="tiles">
         <Tile label="Cash balance" value={headline.cashBalance} />
+        <Tile label="Portfolio value" value={headline.portfolioValue} />
+        <Tile label="Unrealised Gain" value={headline.unrealisedGain} signed />
         <Tile label="Invested Capital" value={headline.investedCapital} />
         <Tile label="Net Contributions" value={headline.netContributions} />
         <Tile label="Realised Gain in period" value={headline.realisedGain} signed />
@@ -53,6 +55,23 @@ export function OverviewTab({ dashboard }: { dashboard: Dashboard }) {
                 { name: 'Cash balance', type: 'line', step: 'end', showSymbol: false, data: overview.balances.map((p) => [p.date, p.cash]) },
                 { name: 'Net Contributions', type: 'line', step: 'end', showSymbol: false, data: overview.balances.map((p) => [p.date, p.netContributions]) },
                 { name: 'Invested Capital', type: 'line', step: 'end', showSymbol: false, data: overview.balances.map((p) => [p.date, p.investedCapital]) },
+              ],
+            }}
+          />
+        </div>
+        <div className="card">
+          <h2>Asset classes</h2>
+          {dashboard.portfolio.unpricedIsins.length > 0 && <p className="muted">Unpriced Positions are shown at Invested Capital.</p>}
+          <Chart
+            option={{
+              tooltip: { trigger: 'item', confine: true },
+              series: [
+                {
+                  type: 'pie',
+                  radius: ['45%', '70%'],
+                  data: dashboard.portfolio.assetClasses.map((a) => ({ name: a.assetClass, value: a.value })),
+                  label: { formatter: '{b}: {d}%' },
+                },
               ],
             }}
           />

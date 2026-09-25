@@ -1,7 +1,7 @@
 import { entriesOf, type AssetClass, type Entry, type TransactionKind } from './entries'
 import { FifoLedger, type Holding } from './fifo'
 import { Decimal, euros, sum, ZERO } from './money'
-import type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrices } from './types'
+import type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrice, MarketPrices } from './types'
 
 export type Scope = 'household' | AccountId
 
@@ -80,6 +80,9 @@ export interface PositionView {
   quantity: number
   averageCost: number
   investedCapital: number
+  marketPrice: MarketPrice | null
+  marketValue: number | null
+  unrealisedGain: number | null
 }
 
 export interface SaleView {
@@ -118,7 +121,12 @@ export interface AccountSummary {
 export interface Dashboard {
   warnings: DashboardWarning[]
   accountSummaries: AccountSummary[]
-  headline: { cashBalance: number; netContributions: number; deposits: number; withdrawals: number; investedCapital: number; realisedGain: number }
+  headline: { cashBalance: number; netContributions: number; deposits: number; withdrawals: number; investedCapital: number
+    realisedGain: number
+    /** Null while any open Position has no Market Price. */
+    portfolioValue: number | null
+    unrealisedGain: number | null
+  }
   overview: {
     months: MonthlyCashflow[]
     /** One point per Transaction Date in the range, as of the end of that day. */
@@ -130,6 +138,9 @@ export interface Dashboard {
     /** Newest first, only sales inside the range. */
     realisedSales: SaleView[]
     accruedInterest: AccruedInterestView[]
+    /** By market value, falling back to Invested Capital for unpriced Positions. Largest first. */
+    assetClasses: { assetClass: AssetClass; value: number }[]
+    unpricedIsins: string[]
   }
   /** Newest first. */
   transactions: TransactionView[]
@@ -169,6 +180,10 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   const ledger = new FifoLedger()
   const balances = balanceSeries(upToEnd, from, crossesBoundary, ledger)
   const salesInRange = ledger.sales.filter((s) => s.entry.date >= from)
+  const positions = positionsOf(ledger, input.marketPrices)
+  const unpriced = positions.filter((p) => p.marketValue === null)
+  const valued = (pick: (p: PositionView) => number | null) =>
+    unpriced.length > 0 ? null : Math.round(positions.reduce((total, p) => total + (pick(p) ?? 0), 0) * 100) / 100
 
   const isDeposit = (e: Entry) => e.kind === 'deposit' && crossesBoundary(e)
   const isWithdrawal = (e: Entry) => e.kind === 'withdrawal' && crossesBoundary(e)
@@ -193,6 +208,8 @@ export function buildDashboard(input: DashboardInput): Dashboard {
       withdrawals: euros(total(inRange, isWithdrawal).negated()),
       investedCapital: euros(ledger.investedCapital()),
       realisedGain: euros(sum(salesInRange.map((s) => s.realisedGain))),
+      portfolioValue: valued((p) => p.marketValue),
+      unrealisedGain: valued((p) => p.unrealisedGain),
     },
     overview: {
       months: monthsBetween(inRange[0]?.date, inRange.at(-1)?.date).map((month) => {
@@ -211,7 +228,9 @@ export function buildDashboard(input: DashboardInput): Dashboard {
       balances,
     },
     portfolio: {
-      positions: positionsOf(ledger),
+      positions,
+      assetClasses: assetClassesOf(positions),
+      unpricedIsins: unpriced.map((p) => p.isin),
       realisedSales: salesInRange.reverse().map((s) => ({
         accountId: s.entry.accountId,
         date: s.entry.date,
@@ -314,7 +333,7 @@ function balanceSeries(entries: Entry[], from: string, contributes: (e: Entry) =
 }
 
 /** Merges holdings of the same ISIN across Accounts (only one Account is in scope unless it's the Household). */
-function positionsOf(ledger: FifoLedger): PositionView[] {
+function positionsOf(ledger: FifoLedger, prices: MarketPrices): PositionView[] {
   const byIsin = new Map<string, { h: Holding; quantity: Decimal; cost: Decimal }>()
   for (const h of ledger.openHoldings()) {
     const current = byIsin.get(h.isin) ?? { h, quantity: ZERO, cost: ZERO }
@@ -323,13 +342,28 @@ function positionsOf(ledger: FifoLedger): PositionView[] {
     byIsin.set(h.isin, current)
   }
   return [...byIsin.values()]
-    .map(({ h, quantity, cost }) => ({
-      isin: h.isin,
-      name: h.name,
-      assetClass: h.assetClass,
-      quantity: quantity.toDecimalPlaces(6).toNumber(),
-      averageCost: cost.dividedBy(quantity).toDecimalPlaces(4).toNumber(),
-      investedCapital: euros(cost),
-    }))
+    .map(({ h, quantity, cost }) => {
+      const marketPrice = prices[h.isin] ?? null
+      const value = marketPrice ? quantity.times(marketPrice.price) : null
+      return {
+        isin: h.isin,
+        name: h.name,
+        assetClass: h.assetClass,
+        quantity: quantity.toDecimalPlaces(6).toNumber(),
+        averageCost: cost.dividedBy(quantity).toDecimalPlaces(4).toNumber(),
+        investedCapital: euros(cost),
+        marketPrice,
+        marketValue: value ? euros(value) : null,
+        unrealisedGain: value ? euros(value.minus(cost)) : null,
+      }
+    })
     .sort((a, b) => b.investedCapital - a.investedCapital)
+}
+
+function assetClassesOf(positions: PositionView[]) {
+  const totals = new Map<AssetClass, number>()
+  for (const p of positions) totals.set(p.assetClass, (totals.get(p.assetClass) ?? 0) + (p.marketValue ?? p.investedCapital))
+  return [...totals]
+    .map(([assetClass, value]) => ({ assetClass, value: Math.round(value * 100) / 100 }))
+    .sort((a, b) => b.value - a.value)
 }

@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "smoke:prices": "vitest run --config vitest.smoke.config.ts",
     "lint": "oxlint",
     "preview": "vite preview"
   },

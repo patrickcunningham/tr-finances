@@ -1,4 +1,6 @@
-import type { AccountRegistration, Dashboard } from '../domain'
+import { useState } from 'react'
+import type { AccountRegistration, Dashboard, PositionView } from '../domain'
+import { age } from './age'
 import { Chart, euroAxis } from './Chart'
 import { money, quantity, signClass } from './format'
 
@@ -6,9 +8,41 @@ interface Props {
   dashboard: Dashboard
   accounts: AccountRegistration[]
   showAccount: boolean
+  onRefreshPrices: (positions: PositionView[]) => void
+  refreshing: boolean
+  failedIsins: string[]
+  onManualPrice: (isin: string, price: number) => void
 }
 
-export function PortfolioTab({ dashboard, accounts, showAccount }: Props) {
+const unitPrice = (p: PositionView, value: number) => (p.assetClass === 'BOND' ? `${(value * 100).toFixed(2)} %` : money(value))
+
+function ManualPrice({ position, onSave }: { position: PositionView; onSave: (price: number) => void }) {
+  const [text, setText] = useState('')
+  const bond = position.assetClass === 'BOND'
+  return (
+    <span className="row" style={{ flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
+      <input
+        aria-label={`Price for ${position.name}`}
+        inputMode="decimal"
+        placeholder={bond ? '% of nominal, in EUR' : 'EUR'}
+        style={{ width: 110 }}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button
+        onClick={() => {
+          const value = Number(text.replace(',', '.'))
+          if (value > 0) onSave(bond ? value / 100 : value)
+          setText('')
+        }}
+      >
+        Set
+      </button>
+    </span>
+  )
+}
+
+export function PortfolioTab({ dashboard, accounts, showAccount, onRefreshPrices, refreshing, failedIsins, onManualPrice }: Props) {
   const { positions, realisedSales } = dashboard.portfolio
   const holder = (id: string) => accounts.find((a) => a.id === id)?.holderName ?? id
   let running = 0
@@ -17,7 +51,17 @@ export function PortfolioTab({ dashboard, accounts, showAccount }: Props) {
   return (
     <>
       <div className="card">
-        <h2>Open Positions</h2>
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Open Positions</h2>
+          <button className="primary" disabled={refreshing || positions.length === 0} onClick={() => onRefreshPrices(positions)}>
+            {refreshing ? 'Refreshing…' : 'Refresh Market Prices'}
+          </button>
+        </div>
+        {failedIsins.length > 0 && (
+          <div className="warning">
+            No source had a price for {failedIsins.join(', ')}. The last known price is kept where there is one, or you can enter one by hand.
+          </div>
+        )}
         <div className="table-wrap">
           <table>
             <thead>
@@ -28,6 +72,9 @@ export function PortfolioTab({ dashboard, accounts, showAccount }: Props) {
                 <th className="num">Quantity</th>
                 <th className="num">FIFO average cost</th>
                 <th className="num">Invested Capital</th>
+                <th className="num">Market Price</th>
+                <th className="num">Value</th>
+                <th className="num">Unrealised Gain</th>
               </tr>
             </thead>
             <tbody>
@@ -37,8 +84,22 @@ export function PortfolioTab({ dashboard, accounts, showAccount }: Props) {
                   <td>{p.isin}</td>
                   <td>{p.assetClass}</td>
                   <td className="num">{quantity(p.quantity)}</td>
-                  <td className="num">{p.assetClass === 'BOND' ? `${(p.averageCost * 100).toFixed(2)} %` : money(p.averageCost)}</td>
+                  <td className="num">{unitPrice(p, p.averageCost)}</td>
                   <td className="num">{money(p.investedCapital)}</td>
+                  <td className="num">
+                    {p.marketPrice ? (
+                      <>
+                        {unitPrice(p, p.marketPrice.price)}
+                        <div className="muted">
+                          {p.marketPrice.source === 'manual' ? 'entered by hand' : p.marketPrice.venue ?? p.marketPrice.source} · {age(p.marketPrice.fetchedAt)}
+                        </div>
+                      </>
+                    ) : (
+                      <ManualPrice position={p} onSave={(price) => onManualPrice(p.isin, price)} />
+                    )}
+                  </td>
+                  <td className="num">{money(p.marketValue)}</td>
+                  <td className={`num ${p.unrealisedGain != null ? signClass(p.unrealisedGain) : ''}`}>{money(p.unrealisedGain)}</td>
                 </tr>
               ))}
             </tbody>

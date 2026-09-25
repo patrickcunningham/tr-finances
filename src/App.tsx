@@ -6,6 +6,7 @@ import { OverviewTab } from './ui/OverviewTab'
 import { PortfolioTab } from './ui/PortfolioTab'
 import { ScopeSwitcher } from './ui/ScopeSwitcher'
 import { TransactionsTab } from './ui/TransactionsTab'
+import { usePriceRefresh } from './ui/usePriceRefresh'
 import { useStoredState } from './ui/useStoredState'
 import { Warnings } from './ui/Warnings'
 
@@ -16,6 +17,7 @@ type Tab = (typeof TABS)[number]
 
 export default function App() {
   const { state, update, loaded, storageError } = useStoredState()
+  const prices = usePriceRefresh(update)
   const [chosenScope, setScope] = useState<Scope>('household')
   const [tab, setTab] = useState<Tab>('Overview')
   const [range, setRange] = useState<DateRange>({ kind: 'all' })
@@ -60,7 +62,17 @@ export default function App() {
       )}
       {activeTab === 'Accounts' && <AccountsPanel state={state} summaries={dashboard.accountSummaries} update={update} />}
       {activeTab === 'Overview' && <OverviewTab dashboard={dashboard} />}
-      {activeTab === 'Portfolio' && <PortfolioTab dashboard={dashboard} accounts={state.accounts} showAccount={scope === 'household'} />}
+      {activeTab === 'Portfolio' && (
+        <PortfolioTab
+          dashboard={dashboard}
+          accounts={state.accounts}
+          showAccount={scope === 'household'}
+          onRefreshPrices={(positions) => void prices.refresh(positions, state.marketPrices)}
+          refreshing={prices.refreshing}
+          failedIsins={prices.failedIsins}
+          onManualPrice={prices.setManualPrice}
+        />
+      )}
       {activeTab === 'Transactions' && (
         <TransactionsTab
           transactions={dashboard.transactions}
