@@ -5,6 +5,7 @@ import { DateFilter } from './ui/DateFilter'
 import { CashflowTab } from './ui/CashflowTab'
 import { IncomeTab } from './ui/IncomeTab'
 import { OverviewTab } from './ui/OverviewTab'
+import { TaxTab } from './ui/TaxTab'
 import { PortfolioTab } from './ui/PortfolioTab'
 import { ScopeSwitcher } from './ui/ScopeSwitcher'
 import { TransactionsTab } from './ui/TransactionsTab'
@@ -24,6 +25,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('Overview')
   const [range, setRange] = useState<DateRange>({ kind: 'all' })
   const [transactionFilter, setTransactionFilter] = useState<TransactionFilter>({})
+  const [chosenTaxYear, setTaxYear] = useState<string | undefined>()
   // Fall back to the Household if the chosen Account has been removed.
   const scope = chosenScope === 'household' || state.accounts.some((a) => a.id === chosenScope) ? chosenScope : 'household'
 
@@ -34,9 +36,9 @@ export default function App() {
         histories: state.histories,
         marketPrices: state.marketPrices,
         allowanceSplits: state.allowanceSplits,
-        options: { scope, range, today: today(), transactionFilter },
+        options: { scope, range, today: today(), transactionFilter, taxYear: chosenTaxYear },
       }),
-    [state, scope, range, transactionFilter],
+    [state, scope, range, transactionFilter, chosenTaxYear],
   )
   if (!loaded) return null
   const hasData = Object.keys(state.histories).length > 0
@@ -77,6 +79,17 @@ export default function App() {
       )}
       {activeTab === 'Income' && <IncomeTab dashboard={dashboard} />}
       {activeTab === 'Cashflow' && <CashflowTab dashboard={dashboard} household={scope === 'household'} />}
+      {activeTab === 'Tax' && (
+        <TaxTab
+          dashboard={dashboard}
+          accounts={state.accounts}
+          year={chosenTaxYear ?? dashboard.tax.years[0] ?? today().slice(0, 4)}
+          onYearChange={setTaxYear}
+          onAllowanceChange={(year, accountId, amount) =>
+            update((s) => ({ ...s, allowanceSplits: { ...s.allowanceSplits, [year]: { ...s.allowanceSplits[year], [accountId]: amount } } }))
+          }
+        />
+      )}
       {activeTab === 'Transactions' && (
         <TransactionsTab
           transactions={dashboard.transactions}

@@ -4,3 +4,4 @@ export type { AccountId, AccountRegistration, AllowanceSplits, Histories, Market
 export type { AssetClass, TransactionKind } from './entries'
 export type { IncomeAmounts, IncomeView } from './income'
 export type { CashflowView, Flow } from './cashflow'
+export { jointAllowance, type AccountTaxYear, type TaxView } from './tax'

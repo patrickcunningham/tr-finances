@@ -23,6 +23,8 @@ export interface Entry {
   datetime: string
   kind: TransactionKind
   tradeSide?: 'buy' | 'sell'
+  /** Trade Republic's own type, e.g. EARNINGS. */
+  type: string
   name: string
   isin: string
   assetClass: AssetClass
@@ -81,6 +83,7 @@ export function toEntry(raw: RawTransaction, accountId: AccountId): Entry {
     date: raw.date,
     datetime: raw.datetime,
     ...classify(raw),
+    type: raw.type,
     name: raw.name,
     isin: raw.symbol,
     assetClass: raw.asset_class,

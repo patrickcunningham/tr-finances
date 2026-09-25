@@ -2,6 +2,7 @@ import { entriesOf, type AssetClass, type Entry, type TransactionKind } from './
 import { FifoLedger, type Holding } from './fifo'
 import { cashflowOf, type CashflowView } from './cashflow'
 import { incomeOf, type IncomeView } from './income'
+import { taxOf, type TaxView } from './tax'
 import { Decimal, euros, sum, ZERO } from './money'
 import type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrice, MarketPrices } from './types'
 
@@ -24,6 +25,8 @@ export interface DashboardOptions {
   range: DateRange
   today: string
   transactionFilter?: TransactionFilter
+  /** Defaults to the latest year with Transactions. */
+  taxYear?: string
 }
 
 export interface DashboardInput {
@@ -146,6 +149,8 @@ export interface Dashboard {
   }
   income: IncomeView
   cashflow: CashflowView
+  /** By tax year; ignores the date range. */
+  tax: TaxView
   /** Newest first. */
   transactions: TransactionView[]
 }
@@ -253,6 +258,13 @@ export function buildDashboard(input: DashboardInput): Dashboard {
     },
     income: incomeOf(inRange, months),
     cashflow: cashflowOf(inRange, (e) => household && e.internalTransfer),
+    tax: taxOf(
+      scoped,
+      accountIds,
+      input.accounts.map((a) => a.id),
+      options.taxYear ?? scoped.at(-1)?.date.slice(0, 4) ?? options.today.slice(0, 4),
+      input.allowanceSplits,
+    ),
     transactions: inRange.filter(matches(options.transactionFilter)).reverse().map(view),
   }
 }
