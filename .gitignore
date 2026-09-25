@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+.DS_Store
+*.local
+*.tsbuildinfo
+# Real Transaction Exports contain personal data (names, IBANs, balances). Never commit them.
+samples/

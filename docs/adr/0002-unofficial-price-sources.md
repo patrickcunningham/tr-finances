@@ -1,0 +1,3 @@
+# Market Prices from unofficial onvista and Tradegate endpoints
+
+Market Prices are fetched straight from the browser: from onvista's undocumented API first, then from Tradegate's `refresh.php` for stocks and ETFs, and typed in by hand as a last resort. These were the only sources that need no API key, allow cross-origin browser requests, accept ISINs and give EUR prices from German exchanges. onvista is the only one that also covers bonds. Official keyed APIs were rejected because a key in a public static site is exposed, and their free plans don't take ISINs or price bonds. The endpoints can break without notice, so the app always shows the last price it fetched, with its timestamp.
