@@ -4,6 +4,7 @@ import { AccountsPanel } from './ui/AccountsPanel'
 import { money } from './ui/format'
 import { TransactionsTab } from './ui/TransactionsTab'
 import { useStoredState } from './ui/useStoredState'
+import { Warnings } from './ui/Warnings'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -28,7 +29,8 @@ export default function App() {
         <h1>TR Finances</h1>
       </div>
       {storageError && <div className="warning">{storageError}</div>}
-      <AccountsPanel state={state} update={update} />
+      <Warnings warnings={dashboard.warnings} accounts={state.accounts} />
+      <AccountsPanel state={state} summaries={dashboard.accountSummaries} update={update} />
       <div className="tiles">
         <div className="tile">
           <div className="label">Cash balance</div>

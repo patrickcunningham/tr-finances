@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { importTransactionExport, type StoredState } from '../domain'
+import { importTransactionExport, type AccountSummary, type StoredState } from '../domain'
 
 interface Props {
   state: StoredState
+  summaries: AccountSummary[]
   update: (change: (current: StoredState) => StoredState) => void
 }
 
-export function AccountsPanel({ state, update }: Props) {
+export function AccountsPanel({ state, summaries, update }: Props) {
   const [holderName, setHolderName] = useState('')
   const [iban, setIban] = useState('')
   const [target, setTarget] = useState('')
@@ -30,6 +31,11 @@ export function AccountsPanel({ state, update }: Props) {
       setMessage({ text: outcome.error, error: true })
       return
     }
+    if (outcome.overlapsAccountId) {
+      const other = state.accounts.find((a) => a.id === outcome.overlapsAccountId)?.holderName
+      const into = state.accounts.find((a) => a.id === targetId)?.holderName
+      if (!confirm(`This export shares Transactions with ${other}'s Account. Import it into ${into}'s Account anyway?`)) return
+    }
     update((s) => ({ ...s, histories: outcome.histories }))
     setMessage({ text: `Imported ${file.name}: ${outcome.added} new Transactions, ${outcome.skipped} already known.` })
   }
@@ -37,11 +43,34 @@ export function AccountsPanel({ state, update }: Props) {
   return (
     <div className="card">
       <h2>Accounts</h2>
-      {state.accounts.map((a) => (
-        <div key={a.id} className="row muted">
-          <strong>{a.holderName}</strong> <span>{a.iban}</span>
-        </div>
-      ))}
+      {state.accounts.map((a) => {
+        const summary = summaries.find((s) => s.accountId === a.id)
+        return (
+          <div key={a.id} className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+            <div>
+              <strong>{a.holderName}</strong> <span className="muted">{a.iban}</span>
+              <div className="muted">
+                {summary
+                  ? `${summary.transactionCount} Transactions, ${summary.firstDate} to ${summary.lastDate} · last imported ${new Date(summary.lastImportedAt).toLocaleString()}`
+                  : 'No Transaction History yet'}
+              </div>
+            </div>
+            {summary && (
+              <button
+                onClick={() => {
+                  if (!confirm(`Delete ${a.holderName}'s Transaction History from this device?`)) return
+                  update((s) => {
+                    const { [a.id]: _removed, ...histories } = s.histories
+                    return { ...s, histories }
+                  })
+                }}
+              >
+                Delete history
+              </button>
+            )}
+          </div>
+        )
+      })}
       <div className="row" style={{ marginTop: 12 }}>
         <input placeholder="Holder name" value={holderName} onChange={(e) => setHolderName(e.target.value)} />
         <input placeholder="Trade Republic IBAN" value={iban} onChange={(e) => setIban(e.target.value)} />
