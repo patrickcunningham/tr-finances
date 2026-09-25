@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { buildDashboard, type DateRange, type Scope, type TransactionFilter } from './domain'
 import { AccountsPanel } from './ui/AccountsPanel'
 import { DateFilter } from './ui/DateFilter'
+import { IncomeTab } from './ui/IncomeTab'
 import { OverviewTab } from './ui/OverviewTab'
 import { PortfolioTab } from './ui/PortfolioTab'
 import { ScopeSwitcher } from './ui/ScopeSwitcher'
@@ -73,6 +74,7 @@ export default function App() {
           onManualPrice={prices.setManualPrice}
         />
       )}
+      {activeTab === 'Income' && <IncomeTab dashboard={dashboard} />}
       {activeTab === 'Transactions' && (
         <TransactionsTab
           transactions={dashboard.transactions}

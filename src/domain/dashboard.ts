@@ -1,5 +1,6 @@
 import { entriesOf, type AssetClass, type Entry, type TransactionKind } from './entries'
 import { FifoLedger, type Holding } from './fifo'
+import { incomeOf, type IncomeView } from './income'
 import { Decimal, euros, sum, ZERO } from './money'
 import type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrice, MarketPrices } from './types'
 
@@ -142,6 +143,7 @@ export interface Dashboard {
     assetClasses: { assetClass: AssetClass; value: number }[]
     unpricedIsins: string[]
   }
+  income: IncomeView
   /** Newest first. */
   transactions: TransactionView[]
 }
@@ -185,6 +187,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   const valued = (pick: (p: PositionView) => number | null) =>
     unpriced.length > 0 ? null : Math.round(positions.reduce((total, p) => total + (pick(p) ?? 0), 0) * 100) / 100
 
+  const months = monthsBetween(inRange[0]?.date, inRange.at(-1)?.date)
   const isDeposit = (e: Entry) => e.kind === 'deposit' && crossesBoundary(e)
   const isWithdrawal = (e: Entry) => e.kind === 'withdrawal' && crossesBoundary(e)
   const total = (list: Entry[], pick: (e: Entry) => boolean) => sum(list.filter(pick).map((e) => e.cashEffect))
@@ -212,7 +215,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
       unrealisedGain: valued((p) => p.unrealisedGain),
     },
     overview: {
-      months: monthsBetween(inRange[0]?.date, inRange.at(-1)?.date).map((month) => {
+      months: months.map((month) => {
         const own = inRange.filter((e) => e.date.startsWith(month))
         return {
           month,
@@ -246,6 +249,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
         .filter((a) => a.entry.date >= from)
         .map((a) => ({ accountId: a.entry.accountId, date: a.entry.date, isin: a.entry.isin, name: a.entry.name, amount: euros(a.amount) })),
     },
+    income: incomeOf(inRange, months),
     transactions: inRange.filter(matches(options.transactionFilter)).reverse().map(view),
   }
 }
