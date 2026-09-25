@@ -4,12 +4,12 @@
 
 **Blocked by:** 04, 05
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Monthly Payout totals, with DIVIDEND and DISTRIBUTION treated as one thing.
-- [ ] Payouts broken down by security.
-- [ ] Monthly and cumulative Interest on cash.
-- [ ] Monthly Coupons from bonds, shown separately from Interest.
-- [ ] Every income figure shown before and after Withheld Tax.
-- [ ] Payouts received in a foreign currency show the original amount, original currency and FX rate.
-- [ ] Domain-core tests check totals against the synthetic test file.
+- [x] Monthly Payout totals, with DIVIDEND and DISTRIBUTION treated as one thing.
+- [x] Payouts broken down by security.
+- [x] Monthly and cumulative Interest on cash.
+- [x] Monthly Coupons from bonds, shown separately from Interest.
+- [x] Every income figure shown before and after Withheld Tax.
+- [x] Payouts received in a foreign currency show the original amount, original currency and FX rate.
+- [x] Domain-core tests check totals against the synthetic test file.

@@ -1,5 +1,6 @@
 import type { Dashboard, IncomeAmounts } from '../domain'
-import { Chart, euroAxis } from './Chart'
+import { Chart } from './Chart'
+import { cumulative, euroAxis } from './chartOptions'
 import { money } from './format'
 
 const AmountsTile = ({ label, amounts }: { label: string; amounts: IncomeAmounts }) => (
@@ -15,8 +16,7 @@ const AmountsTile = ({ label, amounts }: { label: string; amounts: IncomeAmounts
 export function IncomeTab({ dashboard }: { dashboard: Dashboard }) {
   const { totals, months, payoutsBySecurity, foreignCurrency } = dashboard.income
   const labels = months.map((m) => m.month)
-  let running = 0
-  const cumulativeInterest = months.map((m) => (running = Math.round((running + m.interest.net) * 100) / 100))
+  const cumulativeInterest = cumulative(months.map((m) => m.interest.net))
 
   return (
     <>

@@ -4,12 +4,11 @@ import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import ReactEChartsCore from 'echarts-for-react/lib/core'
 import { useEffect, useState } from 'react'
+import { SERIES_COLORS } from './chartOptions'
 
 echarts.use([BarChart, LineChart, PieChart, SankeyChart, HeatmapChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
 export type ChartOption = echarts.EChartsCoreOption
-
-export const SERIES_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#db2777']
 
 const darkQuery = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null)
 
@@ -37,5 +36,3 @@ export function Chart({ option, height = 320 }: { option: ChartOption; height?: 
   }
   return <ReactEChartsCore echarts={echarts} option={themed} notMerge theme={dark ? 'dark' : undefined} style={{ height, width: '100%' }} />
 }
-
-export const euroAxis = { type: 'value', axisLabel: { formatter: (v: number) => `€${Math.round(v).toLocaleString('en-IE')}` } }

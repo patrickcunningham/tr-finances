@@ -1,5 +1,6 @@
 import type { Dashboard } from '../domain'
-import { Chart, euroAxis } from './Chart'
+import { Chart } from './Chart'
+import { euroAxis } from './chartOptions'
 import { money, signClass } from './format'
 
 const Tile = ({ label, value, signed }: { label: string; value: number | null; signed?: boolean }) => (

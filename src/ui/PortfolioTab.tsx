@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { AccountRegistration, Dashboard, PositionView } from '../domain'
 import { age } from './age'
-import { Chart, euroAxis } from './Chart'
+import { Chart } from './Chart'
+import { cumulative, euroAxis } from './chartOptions'
 import { money, quantity, signClass } from './format'
 
 interface Props {
@@ -45,8 +46,9 @@ function ManualPrice({ position, onSave }: { position: PositionView; onSave: (pr
 export function PortfolioTab({ dashboard, accounts, showAccount, onRefreshPrices, refreshing, failedIsins, onManualPrice }: Props) {
   const { positions, realisedSales } = dashboard.portfolio
   const holder = (id: string) => accounts.find((a) => a.id === id)?.holderName ?? id
-  let running = 0
-  const cumulative = [...realisedSales].reverse().map((s) => [s.date, (running = Math.round((running + s.realisedGain) * 100) / 100)])
+  const oldestFirst = [...realisedSales].reverse()
+  const runningGain = cumulative(oldestFirst.map((s) => s.realisedGain))
+  const realisedSeries = oldestFirst.map((s, i) => [s.date, runningGain[i]])
 
   return (
     <>
@@ -113,7 +115,7 @@ export function PortfolioTab({ dashboard, accounts, showAccount, onRefreshPrices
             grid: { left: 70, right: 16, top: 40, bottom: 30 },
             xAxis: { type: 'time' },
             yAxis: euroAxis,
-            series: [{ name: 'Cumulative Realised Gain', type: 'line', step: 'end', data: cumulative }],
+            series: [{ name: 'Cumulative Realised Gain', type: 'line', step: 'end', data: realisedSeries }],
           }}
         />
       </div>

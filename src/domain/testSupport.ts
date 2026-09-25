@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { buildDashboard, importTransactionExport, type AccountRegistration, type DashboardOptions, type Histories } from './index'
 
-const fixture = (name: string) => readFileSync(fileURLToPath(new URL(`../../test/fixtures/${name}`, import.meta.url)), 'utf-8')
+// Relative to the repo root, where Vitest runs (import.meta.url isn't a file URL under jsdom).
+const fixture = (name: string) => readFileSync(join(process.cwd(), 'test', 'fixtures', name), 'utf-8')
 
 export const accountA: AccountRegistration = { id: 'A', holderName: 'Alex Example', iban: 'DE11000000000000000001' }
 export const accountB: AccountRegistration = { id: 'B', holderName: 'Sam Example', iban: 'DE22000000000000000002' }

@@ -139,8 +139,9 @@ It can show the Household or either Account. The only network traffic is fetchin
   - **Coupon:** INTEREST_PAYMENT with an ISIN
   - **Tax Event:** EARNINGS (Vorabpauschale), PRE_DETERMINED_TAX_BASE, TAX_OPTIMIZATION, and any INTEREST_PAYMENT with a zero amount and non-zero tax (a tax correction)
   - **Corporate Action:** the CORPORATE_ACTION category (SPLIT seen so far)
-- **Internal Transfer detection:** a Deposit or Withdrawal whose counterparty IBAN matches the other registered Account's IBAN. In the Household view both sides are removed from flows and totals.
+- **Internal Transfer detection:** a Deposit or Withdrawal whose counterparty IBAN matches the other registered Account's IBAN, or a Withdrawal matched by a Deposit of the same amount into the other Account within 3 days. The pairing is needed because Trade Republic leaves the IBAN off outgoing transfers. In the Household view both sides are removed from flows and totals.
 - **Positions and FIFO:**
+  - Fees are part of cost: a buy's fee adds to its lot's cost, and a sell's fee reduces its proceeds.
   - Lots are kept per Account per ISIN. SELL quantities are negative in the export.
   - A SPLIT's shares value is the change in quantity, not the new total. It is spread across the existing lots in proportion and leaves total cost unchanged.
   - For bonds, quantity is the nominal amount and price is a fraction of nominal.

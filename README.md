@@ -1,32 +1,25 @@
-# React + TypeScript + Vite
+# TR Finances
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A private dashboard for a two-person household's Trade Republic Accounts. Import each Account's Transaction Export (Trade Republic app → Profile → Account Statements → Transaction export) and see the Overview, Transactions, Portfolio, Income, Cashflow and Tax tabs, for the Household or either Account.
 
-Currently, two official plugins are available:
+Everything runs in the browser, and imported data stays on the device (see `docs/adr/0001-client-only-static-site.md`). The only network requests fetch Market Prices by ISIN (see `docs/adr/0002-unofficial-price-sources.md`). On an iPhone, add the site to the Home Screen so iOS keeps its data.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Vocabulary: `CONTEXT.md`
+- Spec: `docs/specs/0001-dashboard-v1.md`
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev            # local dev server
+npm test               # unit and smoke tests (synthetic test files only)
+npm run typecheck
+npm run build          # static site in dist/
+npm run smoke:prices   # manual check against the live price endpoints; never in CI
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Real Transaction Exports hold personal data. Keep them in `samples/`, which git ignores. If `samples/Transaction export.csv` and `samples/expected-cash-balance.txt` exist, a local-only test checks that the calculated cash balance matches the one in the Trade Republic app.
+
+## Deploying
+
+Pushing to `main` runs `.github/workflows/pages.yml`, which tests, builds and publishes to GitHub Pages. The site expects to be served from `/tr-finances/`; change `base` in `vite.config.ts` if the repo has a different name.
