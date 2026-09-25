@@ -6,8 +6,6 @@ import App from './App'
 import { accountA, accountB, bothHistories } from './domain/testSupport'
 import { openHistoryStore } from './storage/historyStore'
 
-// jsdom has no canvas, so charts render as placeholders. Their options are still built by each tab.
-vi.mock('./ui/Chart', () => ({ Chart: () => <div data-testid="chart" /> }))
 
 afterEach(cleanup)
 
@@ -34,5 +32,8 @@ describe('the app, with both synthetic Accounts imported', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Transactions' }))
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(26)
     expect(errors).not.toHaveBeenCalled()
+    // Charts really rendered (as SVG), not just their containers.
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }))
+    expect(document.querySelectorAll('svg').length).toBeGreaterThan(0)
   })
 })
