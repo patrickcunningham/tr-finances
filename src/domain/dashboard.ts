@@ -1,5 +1,6 @@
 import { entriesOf, type AssetClass, type Entry, type TransactionKind } from './entries'
 import { FifoLedger, type Holding } from './fifo'
+import { cashflowOf, type CashflowView } from './cashflow'
 import { incomeOf, type IncomeView } from './income'
 import { Decimal, euros, sum, ZERO } from './money'
 import type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrice, MarketPrices } from './types'
@@ -144,6 +145,7 @@ export interface Dashboard {
     unpricedIsins: string[]
   }
   income: IncomeView
+  cashflow: CashflowView
   /** Newest first. */
   transactions: TransactionView[]
 }
@@ -250,6 +252,7 @@ export function buildDashboard(input: DashboardInput): Dashboard {
         .map((a) => ({ accountId: a.entry.accountId, date: a.entry.date, isin: a.entry.isin, name: a.entry.name, amount: euros(a.amount) })),
     },
     income: incomeOf(inRange, months),
+    cashflow: cashflowOf(inRange, (e) => household && e.internalTransfer),
     transactions: inRange.filter(matches(options.transactionFilter)).reverse().map(view),
   }
 }

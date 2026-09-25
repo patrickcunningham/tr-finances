@@ -3,3 +3,4 @@ export { buildDashboard, type Dashboard, type TransactionView, type DashboardWar
 export type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrice, MarketPrices, PriceSource, RawTransaction, StoredState, TransactionHistory } from './types'
 export type { AssetClass, TransactionKind } from './entries'
 export type { IncomeAmounts, IncomeView } from './income'
+export type { CashflowView, Flow } from './cashflow'

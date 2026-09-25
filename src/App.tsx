@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { buildDashboard, type DateRange, type Scope, type TransactionFilter } from './domain'
 import { AccountsPanel } from './ui/AccountsPanel'
 import { DateFilter } from './ui/DateFilter'
+import { CashflowTab } from './ui/CashflowTab'
 import { IncomeTab } from './ui/IncomeTab'
 import { OverviewTab } from './ui/OverviewTab'
 import { PortfolioTab } from './ui/PortfolioTab'
@@ -75,6 +76,7 @@ export default function App() {
         />
       )}
       {activeTab === 'Income' && <IncomeTab dashboard={dashboard} />}
+      {activeTab === 'Cashflow' && <CashflowTab dashboard={dashboard} household={scope === 'household'} />}
       {activeTab === 'Transactions' && (
         <TransactionsTab
           transactions={dashboard.transactions}
