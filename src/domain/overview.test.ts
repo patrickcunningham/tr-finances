@@ -26,14 +26,14 @@ describe('Overview: cash side', () => {
     expect(dashboardFor({ scope: 'B' }).headline).toMatchObject({ deposits: 6000, withdrawals: 700 })
   })
 
-  it('tracks cash balance and Net Contributions over time', () => {
+  it('tracks cash balance, Net Contributions and Invested Capital over time', () => {
     expect(dashboardFor({ scope: 'B' }).overview.balances).toEqual([
-      { date: '2024-01-05', cash: 5000, netContributions: 5000 },
-      { date: '2024-01-06', cash: 2999, netContributions: 5000 },
-      { date: '2024-09-01', cash: 3999, netContributions: 6000 },
-      { date: '2024-10-01', cash: 3499, netContributions: 5500 },
-      { date: '2024-11-01', cash: 3299, netContributions: 5300 },
-      { date: '2024-12-01', cash: 3306.36, netContributions: 5300 },
+      { date: '2024-01-05', cash: 5000, netContributions: 5000, investedCapital: 0 },
+      { date: '2024-01-06', cash: 2999, netContributions: 5000, investedCapital: 2001 },
+      { date: '2024-09-01', cash: 3999, netContributions: 6000, investedCapital: 2001 },
+      { date: '2024-10-01', cash: 3499, netContributions: 5500, investedCapital: 2001 },
+      { date: '2024-11-01', cash: 3299, netContributions: 5300, investedCapital: 2001 },
+      { date: '2024-12-01', cash: 3306.36, netContributions: 5300, investedCapital: 2001 },
     ])
   })
 
@@ -41,6 +41,6 @@ describe('Overview: cash side', () => {
     const d = dashboardFor({ scope: 'B', range: { kind: 'custom', from: '2024-09-01', to: '2024-10-31' } })
     expect(d.overview.months.map((m) => m.month)).toEqual(['2024-09', '2024-10'])
     expect(d.headline).toMatchObject({ deposits: 1000, withdrawals: 500, cashBalance: 3499 })
-    expect(d.overview.balances[0]).toEqual({ date: '2024-09-01', cash: 3999, netContributions: 6000 })
+    expect(d.overview.balances[0]).toEqual({ date: '2024-09-01', cash: 3999, netContributions: 6000, investedCapital: 2001 })
   })
 })

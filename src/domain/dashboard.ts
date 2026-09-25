@@ -1,5 +1,6 @@
 import { entriesOf, type AssetClass, type Entry, type TransactionKind } from './entries'
-import { euros, sum, ZERO } from './money'
+import { FifoLedger, type Holding } from './fifo'
+import { Decimal, euros, sum, ZERO } from './money'
 import type { AccountId, AccountRegistration, AllowanceSplits, Histories, MarketPrices } from './types'
 
 export type Scope = 'household' | AccountId
@@ -68,6 +69,37 @@ export interface BalancePoint {
   date: string
   cash: number
   netContributions: number
+  investedCapital: number
+}
+
+export interface PositionView {
+  isin: string
+  name: string
+  assetClass: AssetClass
+  /** For a bond, the nominal amount. */
+  quantity: number
+  averageCost: number
+  investedCapital: number
+}
+
+export interface SaleView {
+  accountId: AccountId
+  date: string
+  isin: string
+  name: string
+  assetClass: AssetClass
+  quantity: number
+  cost: number
+  proceeds: number
+  realisedGain: number
+}
+
+export interface AccruedInterestView {
+  accountId: AccountId
+  date: string
+  isin: string
+  name: string
+  amount: number
 }
 
 export type DashboardWarning =
@@ -86,11 +118,18 @@ export interface AccountSummary {
 export interface Dashboard {
   warnings: DashboardWarning[]
   accountSummaries: AccountSummary[]
-  headline: { cashBalance: number; netContributions: number; deposits: number; withdrawals: number }
+  headline: { cashBalance: number; netContributions: number; deposits: number; withdrawals: number; investedCapital: number; realisedGain: number }
   overview: {
     months: MonthlyCashflow[]
     /** One point per Transaction Date in the range, as of the end of that day. */
     balances: BalancePoint[]
+  }
+  portfolio: {
+    /** Largest Invested Capital first. */
+    positions: PositionView[]
+    /** Newest first, only sales inside the range. */
+    realisedSales: SaleView[]
+    accruedInterest: AccruedInterestView[]
   }
   /** Newest first. */
   transactions: TransactionView[]
@@ -127,6 +166,10 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   /** Money that crossed the scope's boundary: Internal Transfers stay inside the Household. */
   const crossesBoundary = (e: Entry) => (e.kind === 'deposit' || e.kind === 'withdrawal') && !(household && e.internalTransfer)
   const accountIds = [...new Set(scoped.map((e) => e.accountId))]
+  const ledger = new FifoLedger()
+  const balances = balanceSeries(upToEnd, from, crossesBoundary, ledger)
+  const salesInRange = ledger.sales.filter((s) => s.entry.date >= from)
+
   const isDeposit = (e: Entry) => e.kind === 'deposit' && crossesBoundary(e)
   const isWithdrawal = (e: Entry) => e.kind === 'withdrawal' && crossesBoundary(e)
   const total = (list: Entry[], pick: (e: Entry) => boolean) => sum(list.filter(pick).map((e) => e.cashEffect))
@@ -148,6 +191,8 @@ export function buildDashboard(input: DashboardInput): Dashboard {
       netContributions: euros(sum(upToEnd.filter(crossesBoundary).map((e) => e.cashEffect))),
       deposits: euros(total(inRange, isDeposit)),
       withdrawals: euros(total(inRange, isWithdrawal).negated()),
+      investedCapital: euros(ledger.investedCapital()),
+      realisedGain: euros(sum(salesInRange.map((s) => s.realisedGain))),
     },
     overview: {
       months: monthsBetween(inRange[0]?.date, inRange.at(-1)?.date).map((month) => {
@@ -163,7 +208,24 @@ export function buildDashboard(input: DashboardInput): Dashboard {
           oneOffBuys: euros(total(own, (e) => e.kind === 'trade' && e.tradeSide === 'buy').negated()),
         }
       }),
-      balances: balanceSeries(upToEnd, from, crossesBoundary),
+      balances,
+    },
+    portfolio: {
+      positions: positionsOf(ledger),
+      realisedSales: salesInRange.reverse().map((s) => ({
+        accountId: s.entry.accountId,
+        date: s.entry.date,
+        isin: s.entry.isin,
+        name: s.entry.name,
+        assetClass: s.entry.assetClass,
+        quantity: s.quantity.toNumber(),
+        cost: euros(s.cost),
+        proceeds: euros(s.proceeds),
+        realisedGain: euros(s.realisedGain),
+      })),
+      accruedInterest: ledger.accruedInterest
+        .filter((a) => a.entry.date >= from)
+        .map((a) => ({ accountId: a.entry.accountId, date: a.entry.date, isin: a.entry.isin, name: a.entry.name, amount: euros(a.amount) })),
     },
     transactions: inRange.filter(matches(options.transactionFilter)).reverse().map(view),
   }
@@ -233,16 +295,41 @@ function monthsBetween(first: string | undefined, last: string | undefined): str
   }
 }
 
-/** `entries` runs from the start of history to the end of the range; points are only emitted from `from`. */
-function balanceSeries(entries: Entry[], from: string, contributes: (e: Entry) => boolean): BalancePoint[] {
+/**
+ * Walks `entries` (start of history to end of range) through the ledger, emitting a point per day from `from`.
+ * Leaves the ledger in its end-of-range state.
+ */
+function balanceSeries(entries: Entry[], from: string, contributes: (e: Entry) => boolean, ledger: FifoLedger): BalancePoint[] {
   const points: BalancePoint[] = []
   let cash = ZERO
   let contributions = ZERO
   entries.forEach((e, i) => {
     cash = cash.plus(e.cashEffect)
+    ledger.apply(e)
     if (contributes(e)) contributions = contributions.plus(e.cashEffect)
     const lastOfDay = entries[i + 1]?.date !== e.date
-    if (lastOfDay && e.date >= from) points.push({ date: e.date, cash: euros(cash), netContributions: euros(contributions) })
+    if (lastOfDay && e.date >= from) points.push({ date: e.date, cash: euros(cash), netContributions: euros(contributions), investedCapital: euros(ledger.investedCapital()) })
   })
   return points
+}
+
+/** Merges holdings of the same ISIN across Accounts (only one Account is in scope unless it's the Household). */
+function positionsOf(ledger: FifoLedger): PositionView[] {
+  const byIsin = new Map<string, { h: Holding; quantity: Decimal; cost: Decimal }>()
+  for (const h of ledger.openHoldings()) {
+    const current = byIsin.get(h.isin) ?? { h, quantity: ZERO, cost: ZERO }
+    current.quantity = current.quantity.plus(sum(h.lots.map((l) => l.quantity)))
+    current.cost = current.cost.plus(sum(h.lots.map((l) => l.cost)))
+    byIsin.set(h.isin, current)
+  }
+  return [...byIsin.values()]
+    .map(({ h, quantity, cost }) => ({
+      isin: h.isin,
+      name: h.name,
+      assetClass: h.assetClass,
+      quantity: quantity.toDecimalPlaces(6).toNumber(),
+      averageCost: cost.dividedBy(quantity).toDecimalPlaces(4).toNumber(),
+      investedCapital: euros(cost),
+    }))
+    .sort((a, b) => b.investedCapital - a.investedCapital)
 }

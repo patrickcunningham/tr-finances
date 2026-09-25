@@ -18,7 +18,9 @@ export function OverviewTab({ dashboard }: { dashboard: Dashboard }) {
     <>
       <div className="tiles">
         <Tile label="Cash balance" value={headline.cashBalance} />
+        <Tile label="Invested Capital" value={headline.investedCapital} />
         <Tile label="Net Contributions" value={headline.netContributions} />
+        <Tile label="Realised Gain in period" value={headline.realisedGain} signed />
         <Tile label="Deposits in period" value={headline.deposits} />
         <Tile label="Withdrawals in period" value={headline.withdrawals} />
       </div>
@@ -50,6 +52,7 @@ export function OverviewTab({ dashboard }: { dashboard: Dashboard }) {
               series: [
                 { name: 'Cash balance', type: 'line', step: 'end', showSymbol: false, data: overview.balances.map((p) => [p.date, p.cash]) },
                 { name: 'Net Contributions', type: 'line', step: 'end', showSymbol: false, data: overview.balances.map((p) => [p.date, p.netContributions]) },
+                { name: 'Invested Capital', type: 'line', step: 'end', showSymbol: false, data: overview.balances.map((p) => [p.date, p.investedCapital]) },
               ],
             }}
           />

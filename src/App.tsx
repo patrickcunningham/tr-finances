@@ -3,6 +3,7 @@ import { buildDashboard, type DateRange, type Scope, type TransactionFilter } fr
 import { AccountsPanel } from './ui/AccountsPanel'
 import { DateFilter } from './ui/DateFilter'
 import { OverviewTab } from './ui/OverviewTab'
+import { PortfolioTab } from './ui/PortfolioTab'
 import { ScopeSwitcher } from './ui/ScopeSwitcher'
 import { TransactionsTab } from './ui/TransactionsTab'
 import { useStoredState } from './ui/useStoredState'
@@ -59,6 +60,7 @@ export default function App() {
       )}
       {activeTab === 'Accounts' && <AccountsPanel state={state} summaries={dashboard.accountSummaries} update={update} />}
       {activeTab === 'Overview' && <OverviewTab dashboard={dashboard} />}
+      {activeTab === 'Portfolio' && <PortfolioTab dashboard={dashboard} accounts={state.accounts} showAccount={scope === 'household'} />}
       {activeTab === 'Transactions' && (
         <TransactionsTab
           transactions={dashboard.transactions}
