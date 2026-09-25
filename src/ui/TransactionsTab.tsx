@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AccountRegistration, TransactionView } from '../domain'
+import type { AccountRegistration, TransactionFilter, TransactionKind, TransactionView } from '../domain'
 import { KIND_LABELS, money, signClass } from './format'
 
 const PAGE_SIZE = 50
@@ -8,9 +8,12 @@ interface Props {
   transactions: TransactionView[]
   accounts: AccountRegistration[]
   showAccount: boolean
+  filter: TransactionFilter
+  onFilterChange: (filter: TransactionFilter) => void
+  onReset: () => void
 }
 
-export function TransactionsTab({ transactions, accounts, showAccount }: Props) {
+export function TransactionsTab({ transactions, accounts, showAccount, filter, onFilterChange, onReset }: Props) {
   const [page, setPage] = useState(0)
   const pages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE))
   const current = Math.min(page, pages - 1)
@@ -19,6 +22,33 @@ export function TransactionsTab({ transactions, accounts, showAccount }: Props) 
 
   return (
     <div className="card">
+      <div className="row" style={{ marginBottom: 12 }}>
+        <select
+          aria-label="Transaction kind"
+          value={filter.kinds?.[0] ?? ''}
+          onChange={(e) => {
+            setPage(0)
+            onFilterChange({ ...filter, kinds: e.target.value ? [e.target.value as TransactionKind] : undefined })
+          }}
+        >
+          <option value="">All kinds</option>
+          {Object.entries(KIND_LABELS).map(([kind, label]) => (
+            <option key={kind} value={kind}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="search"
+          placeholder="Search name, ISIN, description"
+          value={filter.search ?? ''}
+          onChange={(e) => {
+            setPage(0)
+            onFilterChange({ ...filter, search: e.target.value })
+          }}
+        />
+        <button onClick={onReset}>Reset filters</button>
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
