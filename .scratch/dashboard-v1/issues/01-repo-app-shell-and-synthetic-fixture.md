@@ -10,11 +10,11 @@ See ADR 0001 and the spec at docs/specs/0001-dashboard-v1.md.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** done except the items left unticked
+**Status:** done
 
 - [x] Git repo initialised, with real exports excluded from version control. Check that no file containing a real name or IBAN is tracked.
 - [x] Project builds, and an empty Vitest suite runs green.
-- [ ] Empty app deployed to GitHub Pages (workflow added; needs the GitHub repo to be created and pushed), with an app manifest so it can be added to an iPhone Home Screen.
+- [x] App deployed to GitHub Pages at https://patrickcunningham.github.io/tr-finances/, with an app manifest so it can be added to an iPhone Home Screen.
 - [x] Synthetic Transaction Export matches the real export's header exactly: datetime through mcc_code, UTF-8, possibly starting with a byte-order mark.
 - [x] Synthetic data covers every category/type pair seen in the real export: CUSTOMER_INBOUND, TRANSFER_INBOUND, TRANSFER_INSTANT_INBOUND, TRANSFER_OUTBOUND, BUY (including Savings Plan Buys), SELL, DIVIDEND, DISTRIBUTION, INTEREST_PAYMENT (on cash, on a bond, and a zero-amount tax correction), EARNINGS (Vorabpauschale), PRE_DETERMINED_TAX_BASE, TAX_OPTIMIZATION and SPLIT.
 - [x] Synthetic data includes a bond buy with Accrued Interest, a Payout in a foreign currency, and a partial sell.
