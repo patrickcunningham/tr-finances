@@ -36,6 +36,7 @@ export interface TransactionView {
   originalAmount: string
   originalCurrency: string
   fxRate: string
+  internalTransfer: boolean
 }
 
 export type DashboardWarning =
@@ -54,7 +55,7 @@ export interface AccountSummary {
 export interface Dashboard {
   warnings: DashboardWarning[]
   accountSummaries: AccountSummary[]
-  headline: { cashBalance: number }
+  headline: { cashBalance: number; netContributions: number }
   /** Newest first. */
   transactions: TransactionView[]
 }
@@ -75,11 +76,15 @@ const view = (e: Entry): TransactionView => ({
   originalAmount: e.originalAmount,
   originalCurrency: e.originalCurrency,
   fxRate: e.fxRate,
+  internalTransfer: e.internalTransfer,
 })
 
 export function buildDashboard(input: DashboardInput): Dashboard {
   const { histories, options } = input
-  const entries = entriesOf(histories).filter((e) => options.scope === 'household' || e.accountId === options.scope)
+  const household = options.scope === 'household'
+  const entries = entriesOf(histories, input.accounts).filter((e) => household || e.accountId === options.scope)
+  /** Money that crossed the scope's boundary: Internal Transfers stay inside the Household. */
+  const crossesBoundary = (e: Entry) => (e.kind === 'deposit' || e.kind === 'withdrawal') && !(household && e.internalTransfer)
   const accountIds = [...new Set(entries.map((e) => e.accountId))]
   return {
     warnings: accountIds.flatMap((id) => warningsFor(id, entries.filter((e) => e.accountId === id))),
@@ -93,7 +98,10 @@ export function buildDashboard(input: DashboardInput): Dashboard {
         lastImportedAt: histories[id].lastImportedAt,
       }
     }),
-    headline: { cashBalance: euros(sum(entries.map((e) => e.cashEffect))) },
+    headline: {
+      cashBalance: euros(sum(entries.map((e) => e.cashEffect))),
+      netContributions: euros(sum(entries.filter(crossesBoundary).map((e) => e.cashEffect))),
+    },
     transactions: [...entries].sort(chronological).reverse().map(view),
   }
 }

@@ -1,5 +1,5 @@
 import { dec, type Decimal } from './money'
-import type { AccountId, Histories, RawTransaction } from './types'
+import type { AccountId, AccountRegistration, Histories, RawTransaction } from './types'
 
 export type TransactionKind =
   | 'deposit'
@@ -38,6 +38,8 @@ export interface Entry {
   description: string
   counterpartyName: string
   counterpartyIban: string
+  /** Money moved between the two registered Accounts. */
+  internalTransfer: boolean
 }
 
 export function classify(raw: RawTransaction): { kind: TransactionKind; tradeSide?: 'buy' | 'sell' } {
@@ -94,6 +96,7 @@ export function toEntry(raw: RawTransaction, accountId: AccountId): Entry {
     description: raw.description,
     counterpartyName: raw.counterparty_name,
     counterpartyIban: raw.counterparty_iban,
+    internalTransfer: false,
   }
 }
 
@@ -101,8 +104,47 @@ export function toEntry(raw: RawTransaction, accountId: AccountId): Entry {
 export const chronological = (a: Entry, b: Entry) =>
   a.date === b.date ? a.datetime.localeCompare(b.datetime) : a.date.localeCompare(b.date)
 
-export function entriesOf(histories: Histories): Entry[] {
-  return Object.values(histories)
+export function entriesOf(histories: Histories, accounts: AccountRegistration[]): Entry[] {
+  const entries = Object.values(histories)
     .flatMap((h) => h.transactions.map((t) => toEntry(t, h.accountId)))
     .sort(chronological)
+  markInternalTransfers(entries, accounts)
+  return entries
+}
+
+const PAIRING_WINDOW_DAYS = 3
+const daysBetween = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000
+
+/**
+ * An Internal Transfer is recognised when the counterparty IBAN is the other registered Account's IBAN,
+ * or when a Withdrawal is matched by a Deposit of the same amount into the other Account within a few days.
+ * Trade Republic leaves the IBAN off outgoing transfers, so the pairing catches that side.
+ */
+function markInternalTransfers(entries: Entry[], accounts: AccountRegistration[]) {
+  const otherIbans = (accountId: AccountId) =>
+    new Set(accounts.filter((a) => a.id !== accountId && a.iban).map((a) => a.iban.replace(/\s+/g, '').toUpperCase()))
+  const transfers = entries.filter((e) => e.kind === 'deposit' || e.kind === 'withdrawal')
+
+  for (const e of transfers) {
+    if (e.counterpartyIban && otherIbans(e.accountId).has(e.counterpartyIban.toUpperCase())) e.internalTransfer = true
+  }
+
+  const paired = new Set<Entry>()
+  for (const out of transfers.filter((e) => e.kind === 'withdrawal')) {
+    const match = transfers.find(
+      (d) =>
+        d.kind === 'deposit' &&
+        !paired.has(d) &&
+        d.accountId !== out.accountId &&
+        d.amount.equals(out.amount.negated()) &&
+        daysBetween(d.date, out.date) <= PAIRING_WINDOW_DAYS &&
+        // A Deposit that names an IBAN must name the sending Account's.
+        (!d.counterpartyIban || otherIbans(d.accountId).has(d.counterpartyIban.toUpperCase())),
+    )
+    if (match) {
+      paired.add(match)
+      out.internalTransfer = true
+      match.internalTransfer = true
+    }
+  }
 }
