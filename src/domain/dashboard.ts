@@ -50,6 +50,26 @@ export interface TransactionView {
   internalTransfer: boolean
 }
 
+export interface MonthlyCashflow {
+  month: string
+  deposits: number
+  withdrawals: number
+  /** Cash spent on buys, including fees. */
+  bought: number
+  /** Cash received from sells, after fees and Withheld Tax. */
+  sold: number
+  /** Payouts, Interest and Coupons after Withheld Tax. */
+  income: number
+  savingsPlanBuys: number
+  oneOffBuys: number
+}
+
+export interface BalancePoint {
+  date: string
+  cash: number
+  netContributions: number
+}
+
 export type DashboardWarning =
   | { type: 'unclassifiedTransactions'; accountId: AccountId; count: number }
   /** The earliest Transaction doesn't look like the Account's opening, so balances may be wrong. */
@@ -66,7 +86,12 @@ export interface AccountSummary {
 export interface Dashboard {
   warnings: DashboardWarning[]
   accountSummaries: AccountSummary[]
-  headline: { cashBalance: number; netContributions: number }
+  headline: { cashBalance: number; netContributions: number; deposits: number; withdrawals: number }
+  overview: {
+    months: MonthlyCashflow[]
+    /** One point per Transaction Date in the range, as of the end of that day. */
+    balances: BalancePoint[]
+  }
   /** Newest first. */
   transactions: TransactionView[]
 }
@@ -102,6 +127,10 @@ export function buildDashboard(input: DashboardInput): Dashboard {
   /** Money that crossed the scope's boundary: Internal Transfers stay inside the Household. */
   const crossesBoundary = (e: Entry) => (e.kind === 'deposit' || e.kind === 'withdrawal') && !(household && e.internalTransfer)
   const accountIds = [...new Set(scoped.map((e) => e.accountId))]
+  const isDeposit = (e: Entry) => e.kind === 'deposit' && crossesBoundary(e)
+  const isWithdrawal = (e: Entry) => e.kind === 'withdrawal' && crossesBoundary(e)
+  const total = (list: Entry[], pick: (e: Entry) => boolean) => sum(list.filter(pick).map((e) => e.cashEffect))
+
   return {
     warnings: accountIds.flatMap((id) => warningsFor(id, scoped.filter((e) => e.accountId === id))),
     accountSummaries: accountIds.map((id) => {
@@ -117,6 +146,24 @@ export function buildDashboard(input: DashboardInput): Dashboard {
     headline: {
       cashBalance: euros(sum(upToEnd.map((e) => e.cashEffect))),
       netContributions: euros(sum(upToEnd.filter(crossesBoundary).map((e) => e.cashEffect))),
+      deposits: euros(total(inRange, isDeposit)),
+      withdrawals: euros(total(inRange, isWithdrawal).negated()),
+    },
+    overview: {
+      months: monthsBetween(inRange[0]?.date, inRange.at(-1)?.date).map((month) => {
+        const own = inRange.filter((e) => e.date.startsWith(month))
+        return {
+          month,
+          deposits: euros(total(own, isDeposit)),
+          withdrawals: euros(total(own, isWithdrawal).negated()),
+          bought: euros(total(own, (e) => e.tradeSide === 'buy').negated()),
+          sold: euros(total(own, (e) => e.tradeSide === 'sell')),
+          income: euros(total(own, isIncome)),
+          savingsPlanBuys: euros(total(own, (e) => e.kind === 'savingsPlanBuy').negated()),
+          oneOffBuys: euros(total(own, (e) => e.kind === 'trade' && e.tradeSide === 'buy').negated()),
+        }
+      }),
+      balances: balanceSeries(upToEnd, from, crossesBoundary),
     },
     transactions: inRange.filter(matches(options.transactionFilter)).reverse().map(view),
   }
@@ -167,4 +214,35 @@ const matches = (filter: TransactionFilter | undefined) => (e: Entry) => {
   const needle = filter?.search?.trim().toLowerCase()
   if (needle && ![e.name, e.isin, e.description].some((field) => field.toLowerCase().includes(needle))) return false
   return true
+}
+
+const isIncome = (e: Entry) => e.kind === 'payout' || e.kind === 'interest' || e.kind === 'coupon'
+
+/** Every calendar month from the first date to the last, as YYYY-MM. */
+function monthsBetween(first: string | undefined, last: string | undefined): string[] {
+  if (!first || !last) return []
+  const months: string[] = []
+  let [year, month] = first.slice(0, 7).split('-').map(Number)
+  const end = last.slice(0, 7)
+  for (;;) {
+    const current = `${year}-${String(month).padStart(2, '0')}`
+    months.push(current)
+    if (current >= end) return months
+    month = month === 12 ? 1 : month + 1
+    if (month === 1) year++
+  }
+}
+
+/** `entries` runs from the start of history to the end of the range; points are only emitted from `from`. */
+function balanceSeries(entries: Entry[], from: string, contributes: (e: Entry) => boolean): BalancePoint[] {
+  const points: BalancePoint[] = []
+  let cash = ZERO
+  let contributions = ZERO
+  entries.forEach((e, i) => {
+    cash = cash.plus(e.cashEffect)
+    if (contributes(e)) contributions = contributions.plus(e.cashEffect)
+    const lastOfDay = entries[i + 1]?.date !== e.date
+    if (lastOfDay && e.date >= from) points.push({ date: e.date, cash: euros(cash), netContributions: euros(contributions) })
+  })
+  return points
 }

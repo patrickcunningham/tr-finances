@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { buildDashboard, type DateRange, type Scope, type TransactionFilter } from './domain'
 import { AccountsPanel } from './ui/AccountsPanel'
 import { DateFilter } from './ui/DateFilter'
-import { money } from './ui/format'
+import { OverviewTab } from './ui/OverviewTab'
 import { ScopeSwitcher } from './ui/ScopeSwitcher'
 import { TransactionsTab } from './ui/TransactionsTab'
 import { useStoredState } from './ui/useStoredState'
@@ -58,18 +58,7 @@ export default function App() {
         </div>
       )}
       {activeTab === 'Accounts' && <AccountsPanel state={state} summaries={dashboard.accountSummaries} update={update} />}
-      {activeTab === 'Overview' && (
-        <div className="tiles">
-          <div className="tile">
-            <div className="label">Cash balance</div>
-            <div className="value">{money(dashboard.headline.cashBalance)}</div>
-          </div>
-          <div className="tile">
-            <div className="label">Net Contributions</div>
-            <div className="value">{money(dashboard.headline.netContributions)}</div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'Overview' && <OverviewTab dashboard={dashboard} />}
       {activeTab === 'Transactions' && (
         <TransactionsTab
           transactions={dashboard.transactions}
